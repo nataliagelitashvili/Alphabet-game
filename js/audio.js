@@ -1,23 +1,50 @@
-/* Audio Manager: plays recorded Georgian letter audio from assets/audio/ when available,
- * plus crisp Web Audio API sound effects. Never uses synthetic Georgian TTS.
+/* Audio Manager:
+ * - Plays real MP3 music tracks per screen/region (main, library, map, level, forest, mountain, boss, ending)
+ * - Plays real MP3 SFX (button, collect, correct, wrong, book_open, level_unlock, level_complete) with Web Audio fallback
+ * - Plays all 33 Georgian letter recordings (assets/audio/letters/01.mp3..33.mp3)
+ * - Respects mobile browser autoplay rules (unlocks on first user gesture, never blasts loud audio)
  */
 LL.audio = {
   ctx: null,
+  bgmEl: null,
+  currentTrack: null,
+  desiredTrack: null,
   activeVoice: null,
-  musicTimer: null,
-  settings: { sfx: true, music: false, volume: 0.8 },
+  unlocked: false,
+  settings: { sfx: true, music: true, muted: false, volume: 0.65 },
 
   init() {
     try {
       const saved = JSON.parse(localStorage.getItem('ll_settings') || 'null');
       if (saved) Object.assign(this.settings, saved);
     } catch (_) {}
+
+    const unlock = () => {
+      this.unlocked = true;
+      this.ensureCtx();
+      if (this.desiredTrack && !this.bgmEl) {
+        this.playMusic(this.desiredTrack);
+      }
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
   },
 
   saveSettings(patch) {
     Object.assign(this.settings, patch);
     localStorage.setItem('ll_settings', JSON.stringify(this.settings));
-    if (!this.settings.music) this.stopMusic();
+    if (this.bgmEl) {
+      if (this.settings.muted || !this.settings.music) {
+        this.bgmEl.pause();
+      } else {
+        this.bgmEl.volume = Math.max(0, Math.min(1, this.settings.volume * 0.45));
+        this.bgmEl.play().catch(() => {});
+      }
+    } else if (!this.settings.muted && this.settings.music && this.desiredTrack && this.unlocked) {
+      this.playMusic(this.desiredTrack);
+    }
     if (LL.progress && LL.progress.saveSettings) {
       LL.progress.saveSettings(this.settings);
     }
@@ -34,8 +61,42 @@ LL.audio = {
     return this.ctx;
   },
 
-  tone(freq, dur = 0.12, type = 'triangle', gain = 0.14, delay = 0) {
-    if (!this.settings.sfx) return;
+  /* Switches background music smoothly between homepage, intro, map, regions, boss, and ending */
+  playMusic(trackKey) {
+    this.desiredTrack = trackKey;
+    if (this.settings.muted || !this.settings.music) return;
+    if (!this.unlocked) return; // Wait for first tap/click on mobile browsers
+    if (this.currentTrack === trackKey && this.bgmEl && !this.bgmEl.paused) return;
+
+    const rel = LL.assets?.manifest?.audio?.music?.[trackKey];
+    if (!rel) return;
+
+    if (this.bgmEl) {
+      this.bgmEl.pause();
+      this.bgmEl = null;
+    }
+
+    const audio = new Audio(LL.assets.url(rel));
+    audio.loop = true;
+    audio.preload = 'metadata';
+    audio.volume = Math.max(0, Math.min(1, this.settings.volume * 0.45));
+    this.currentTrack = trackKey;
+    this.bgmEl = audio;
+    audio.play().catch(() => {
+      // Missing MP3 file or blocked by browser: fail silently without breaking gameplay
+      this.bgmEl = null;
+    });
+  },
+
+  musicForLevel(levelNum) {
+    if (levelNum === 3) return 'forest'; // Borjomi
+    if (levelNum === 7 || levelNum === 8) return 'mountain'; // Tusheti & Svaneti
+    if (levelNum === 11) return 'boss'; // Final fortress
+    return 'level';
+  },
+
+  tone(freq, dur = 0.12, type = 'triangle', gain = 0.12, delay = 0) {
+    if (this.settings.muted || !this.settings.sfx) return;
     const ctx = this.ensureCtx();
     if (!ctx) return;
     const now = ctx.currentTime + delay;
@@ -52,45 +113,39 @@ LL.audio = {
     osc.stop(now + dur + 0.02);
   },
 
-  play(name) {
-    if (!this.settings.sfx) return;
+  playFallbackTone(name) {
     switch (name) {
-      case 'click':
-        this.tone(520, 0.07, 'square', 0.08);
-        break;
-      case 'jump':
-        this.tone(280, 0.09, 'triangle', 0.12, 0);
-        this.tone(420, 0.11, 'triangle', 0.12, 0.05);
-        break;
+      case 'click': this.tone(520, 0.06, 'square', 0.07); break;
+      case 'jump': this.tone(280, 0.08, 'triangle', 0.1, 0); this.tone(420, 0.1, 'triangle', 0.1, 0.05); break;
       case 'collect':
-        this.tone(587.33, 0.1, 'triangle', 0.14, 0);
-        this.tone(880, 0.18, 'triangle', 0.14, 0.08);
-        break;
-      case 'wrong':
-        this.tone(220, 0.14, 'sawtooth', 0.1, 0);
-        this.tone(175, 0.18, 'sawtooth', 0.1, 0.1);
-        break;
-      case 'book':
-        this.tone(392, 0.08, 'sine', 0.1, 0);
-        this.tone(523.25, 0.12, 'sine', 0.1, 0.06);
-        break;
+      case 'correct': this.tone(587.33, 0.09, 'triangle', 0.12, 0); this.tone(880, 0.16, 'triangle', 0.12, 0.07); break;
+      case 'wrong': this.tone(220, 0.12, 'sawtooth', 0.09, 0); this.tone(180, 0.16, 'sawtooth', 0.09, 0.09); break;
+      case 'book': this.tone(392, 0.08, 'sine', 0.09, 0); this.tone(523.25, 0.11, 'sine', 0.09, 0.06); break;
+      case 'unlock':
       case 'win':
-        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-          this.tone(f, 0.22, 'triangle', 0.15, i * 0.11);
-        });
-        break;
       case 'grand_finale':
-        [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98].forEach((f, i) => {
-          this.tone(f, 0.35, 'triangle', 0.16, i * 0.13);
-        });
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, 0.2, 'triangle', 0.13, i * 0.1));
         break;
     }
   },
 
-  /* Plays recorded Georgian audio file if supplied in assets/audio/letters/XX.mp3 */
+  play(name) {
+    if (this.settings.muted || !this.settings.sfx) return;
+    const rel = LL.assets?.manifest?.audio?.sfx?.[name];
+    if (rel) {
+      try {
+        const sfx = new Audio(LL.assets.url(rel));
+        sfx.volume = this.settings.volume;
+        sfx.play().catch(() => this.playFallbackTone(name));
+        return;
+      } catch (_) {}
+    }
+    this.playFallbackTone(name);
+  },
+
   playLetter(letterObj, onFallbackNotice) {
-    this.play('collect');
     if (!letterObj || !letterObj.audio) {
+      this.play('collect');
       if (onFallbackNotice) onFallbackNotice();
       return;
     }
@@ -100,44 +155,15 @@ LL.audio = {
         this.activeVoice = null;
       }
       const audio = new Audio(letterObj.audio);
-      audio.volume = this.settings.volume;
+      audio.volume = this.settings.muted ? 0 : this.settings.volume;
       this.activeVoice = audio;
       audio.play().catch(() => {
+        this.play('collect');
         if (onFallbackNotice) onFallbackNotice();
       });
     } catch (_) {
+      this.play('collect');
       if (onFallbackNotice) onFallbackNotice();
-    }
-  },
-
-  startMusic() {
-    if (!this.settings.music || this.musicTimer) return;
-    const notes = [293.66, 349.23, 440.0, 392.0, 349.23, 329.63, 293.66, 261.63];
-    let step = 0;
-    this.musicTimer = setInterval(() => {
-      if (!this.settings.music) return;
-      const ctx = this.ensureCtx();
-      if (!ctx) return;
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(notes[step % notes.length], now);
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.035 * this.settings.volume, now + 0.05);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-      osc.connect(g);
-      g.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.45);
-      step++;
-    }, 520);
-  },
-
-  stopMusic() {
-    if (this.musicTimer) {
-      clearInterval(this.musicTimer);
-      this.musicTimer = null;
     }
   }
 };
