@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ka">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>დაკარგული ასოების საიდუმლო</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2314203f'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-size='40' font-weight='bold' fill='%23f2b632'%3E%E1%83%90%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/game.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true"></div>
+  <nav id="nav"></nav>
+  <main>
+    <h1>დაკარგული ასოების საიდუმლო</h1>
+    <div class="hero">
+      <div>
+        <canvas data-sprite="iakob" data-px="3" aria-label="იაკობ გოგებაშვილი"></canvas>
+        <p>იაკობ გოგებაშვილი</p>
+      </div>
+      <div class="center panel">
+        <p>ძველ, ჯადოსნურ ბიბლიოთეკაში ასოყლაპიამ ქართული ანბანის 33 ასო მოიპარა. დაეხმარე იაკობს, საქართველოს 11 კუთხეში დაკარგული ასოები დააბრუნოს!</p>
+        <div class="actions">
+          <button class="btn big" id="startBtn">თავგადასავლის დაწყება</button>
+          <button class="btn" id="contBtn" hidden>გაგრძელება</button>
+          <div>
+            <button class="btn alt" id="storyBtn">📖 ისტორია</button>
+            <button class="btn alt" id="openLogin">შესვლა</button>
+            <button class="btn alt" id="openReg">რეგისტრაცია</button>
+            <button class="btn alt" id="settingsBtn">პარამეტრები</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <canvas data-sprite="monster" data-px="3" aria-label="ასოყლაპია"></canvas>
+        <p>ასოყლაპია</p>
+      </div>
+    </div>
+  </main>
+
+  <dialog id="authDlg">
+    <div class="panel">
+      <h2></h2>
+      <form novalidate>
+        <label>ელფოსტა<input name="email" type="email" autocomplete="email"></label>
+        <label class="reg" hidden>მეტსახელი<input name="nickname" maxlength="20"></label>
+        <label>პაროლი<input name="password" type="password" autocomplete="current-password"></label>
+        <label class="reg" hidden>გაიმეორეთ პაროლი<input name="confirm" type="password"></label>
+        <p class="err" role="alert"></p>
+        <button class="btn">გაგზავნა</button>
+        <button type="button" class="btn alt close">დახურვა</button>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="setDlg">
+    <div class="panel">
+      <h2>პარამეტრები</h2>
+      <form method="dialog"><button class="btn">დახურვა</button></form>
+    </div>
+  </dialog>
+
+  <div id="intro">
+    <div class="stage">
+      <canvas data-sprite="iakob" data-px="3"></canvas>
+      <div class="monster"><canvas data-sprite="monster" data-px="3"></canvas></div>
+    </div>
+    <div class="panel">
+      <b class="who"></b>
+      <p class="txt"></p>
+      <button class="btn next">შემდეგი</button>
+      <button class="btn alt skip">გამოტოვება</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/achievements.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/levels-data.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/alphabet-book.js"></script>
+  <script src="js/app.js"></script>
+  <script>LL.init('home')</script>
+</body>
+</html>

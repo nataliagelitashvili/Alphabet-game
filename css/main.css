@@ -1,0 +1,32 @@
+/* Design system: palette tokens + pixel panels/buttons. Reuse these; do not add a second system. */
+:root{--parch:#f1e2bb;--forest:#2f6b3a;--green:#5fd35f;--navy:#14203f;--gold:#f2b632;--leather:#8b5a2b;--ink:#2a1d10}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:'Noto Sans Georgian',sans-serif;font-weight:700;color:var(--parch);background:linear-gradient(#14203f,#2f6b3a 85%,#1d4a27);overflow-x:hidden}
+canvas.sprite{image-rendering:pixelated}
+.sky{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.sky span{position:absolute;bottom:-60px;font-size:2rem;color:var(--gold);opacity:.35;animation:float linear infinite}
+@keyframes float{to{transform:translateY(-110vh) rotate(25deg)}}
+nav#nav{position:relative;z-index:2;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:10px}
+.panel{background:var(--parch);color:var(--ink);border:4px solid var(--ink);box-shadow:0 0 0 4px var(--leather),6px 8px 0 4px rgba(0,0,0,.4);padding:18px;position:relative;z-index:1}
+.btn{font:inherit;cursor:pointer;color:var(--ink);background:var(--gold);border:4px solid var(--ink);padding:10px 18px;box-shadow:inset -4px -4px 0 rgba(0,0,0,.25),inset 4px 4px 0 rgba(255,255,255,.4);text-decoration:none;display:inline-block}
+.btn:hover{background:#ffd25e}.btn:active{transform:translateY(3px)}.btn:focus-visible{outline:4px solid #fff}
+.btn.big{font-size:1.5rem;padding:16px 34px;background:var(--green)}.btn.alt{background:var(--parch)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+main{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:12px}
+h1{font-size:clamp(1.6rem,5vw,3.2rem);color:var(--gold);text-shadow:4px 4px 0 var(--ink),-2px -2px 0 var(--ink);text-align:center;margin:.3em 0}
+.hero{display:grid;grid-template-columns:1fr 2fr 1fr;align-items:end;gap:12px;text-align:center}
+.actions{display:flex;flex-direction:column;gap:12px;align-items:center;margin:14px 0}
+label{display:block;margin:10px 0 4px}input{width:100%;font:inherit;padding:10px;border:4px solid var(--ink);background:#fff8e3}
+.err{color:#a32020;min-height:1.4em}.note{font-size:.9rem;opacity:.8}
+dialog{padding:0;border:0;background:none;max-width:440px;width:92%}dialog::backdrop{background:rgba(10,15,40,.75)}
+#intro{position:fixed;inset:0;z-index:20;background:linear-gradient(#14203f,#2f6b3a);display:none;flex-direction:column;justify-content:flex-end;padding:12px;gap:12px}
+#intro.on{display:flex}
+#intro .stage{flex:1;display:flex;justify-content:space-around;align-items:flex-end}
+#intro .monster{transition:transform 1.2s ease-in;transform:translateX(-30vw)}#intro .monster.run{transform:translateX(70vw)}
+@media(prefers-reduced-motion:reduce){.sky span{animation:none}#intro .monster{transition:none}}
+/* Art-direction overhaul: refined RPG panels, restrained buttons, pending-asset slots */
+.panel{border:2px solid #3a2714;box-shadow:inset 0 0 0 3px var(--parch),inset 0 0 0 4px var(--leather),0 10px 24px rgba(0,0,0,.45);background:linear-gradient(#f4e8c8,#e8d6a6)}
+.btn{border:2px solid var(--ink);padding:8px 16px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.2),0 2px 6px rgba(0,0,0,.35);letter-spacing:.02em}
+.btn.big{font-size:1.25rem;padding:12px 28px;background:linear-gradient(#e9c25a,#c9962b)}
+h1{text-shadow:0 3px 0 #3a2714,0 6px 18px rgba(0,0,0,.6)}
+.pending{display:flex;align-items:center;justify-content:center;min-height:120px;padding:12px;border:2px dashed var(--gold);color:var(--gold);background:rgba(20,32,63,.55);font-size:.85rem;text-align:center}
