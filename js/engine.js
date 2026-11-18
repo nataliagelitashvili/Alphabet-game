@@ -1,9 +1,8 @@
-/* Complete 2D HTML5 Canvas Game Engine + Difficulty Modes + Pedagogically Isolated Multi-Stage Challenges.
- * Rules enforced:
- * - Each level has 6-10 multi-stage activities teaching and reinforcing ONLY its 3 target letters
- *   (plus previously learned letters from earlier levels — never unlearned letters from future levels).
- * - Three difficulty modes: EASY (no strict timer, more hints, fewer decoys), NORMAL, CHALLENGE.
- * - Child-friendly: unlimited retries, no punishing game-over screens, encouraging explanations & optional hints.
+/* Complete 2D HTML5 Canvas Game Engine + 11 Distinct Region Minigames
+ * Slices real pixel-art props & tiles from assets/minigames/{maze_tile,memory_card,puzzle_board,hidden_objects}.png
+ * Enforces:
+ * - Each level teaches & reinforces ONLY its 3 target letters (and previously learned letters id <= level * 3)
+ * - 3 difficulty modes (Easy, Normal, Challenge), child-friendly hints, no punishing game-overs
  */
 LL.engine = {
   W: 960,
@@ -18,11 +17,11 @@ LL.engine = {
 
   level: null,
   levelLetters: [],
-  learnedPool: [], // ONLY letters from levels 1..N (never unlearned future letters)
+  learnedPool: [],
   allLetters: [],
   layers: null,
   sheets: null,
-  mgArt: {},
+  props: {}, // Cropped pixel-art prop dataURLs from the 4 minigame atlases
 
   mode: 'dialogue',
   dialogueQueue: [],
@@ -54,6 +53,68 @@ LL.engine = {
   flyingLetters: [],
   skyFinaleLetters: [],
 
+  /* Crops a normalized [x, y, w, h] sub-rectangle from a sprite atlas into a crisp dataURL */
+  cropProp(img, rx, ry, rw, rh, outW = 96, outH = 96) {
+    if (!img) return '';
+    const sw = Math.max(1, Math.round(img.width * rw));
+    const sh = Math.max(1, Math.round(img.height * rh));
+    const sx = Math.round(img.width * rx);
+    const sy = Math.round(img.height * ry);
+    const cv = document.createElement('canvas');
+    cv.width = outW;
+    cv.height = outH;
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = false;
+    c.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+    return cv.toDataURL('image/png');
+  },
+
+  async loadMinigameProps() {
+    if (this.props._ready) return this.props;
+    const m = LL.assets.manifest.minigames || {};
+    const [mazeImg, memImg, puzImg, hidImg] = await Promise.all([
+      LL.assets.load(m.maze),
+      LL.assets.load(m.memory),
+      LL.assets.load(m.puzzle),
+      LL.assets.load(m.hidden)
+    ]);
+
+    this.props = {
+      _ready: true,
+      // From maze_tile.png
+      stoneWall: this.cropProp(mazeImg, 0.015, 0.02, 0.105, 0.18, 64, 64),
+      grassTile: this.cropProp(mazeImg, 0.34, 0.02, 0.105, 0.18, 64, 64),
+      woodDoor: this.cropProp(mazeImg, 0.02, 0.21, 0.13, 0.19, 80, 96),
+      ironGate: this.cropProp(mazeImg, 0.17, 0.21, 0.15, 0.19, 80, 96),
+      goldKey: this.cropProp(mazeImg, 0.55, 0.42, 0.17, 0.12, 96, 56),
+      chestClosed: this.cropProp(mazeImg, 0.74, 0.41, 0.11, 0.15, 84, 76),
+      chestOpen: this.cropProp(mazeImg, 0.86, 0.41, 0.12, 0.15, 84, 76),
+      sunTile: this.cropProp(mazeImg, 0.16, 0.60, 0.11, 0.17, 72, 72),
+      gemTile: this.cropProp(mazeImg, 0.28, 0.60, 0.11, 0.17, 72, 72),
+      scroll: this.cropProp(mazeImg, 0.35, 0.80, 0.09, 0.18, 64, 80),
+      lantern: this.cropProp(mazeImg, 0.90, 0.80, 0.08, 0.18, 64, 80),
+
+      // From memory_card.png
+      cardBack: this.cropProp(memImg, 0.025, 0.03, 0.105, 0.29, 96, 132),
+      cardFront: this.cropProp(memImg, 0.145, 0.03, 0.105, 0.29, 96, 132),
+      woodRune: this.cropProp(memImg, 0.50, 0.03, 0.095, 0.17, 72, 72),
+
+      // From puzzle_board.png
+      slotTile: this.cropProp(puzImg, 0.02, 0.03, 0.095, 0.18, 72, 72),
+      lockClosed: this.cropProp(puzImg, 0.34, 0.56, 0.075, 0.19, 64, 80),
+      lockOpen: this.cropProp(puzImg, 0.43, 0.56, 0.08, 0.19, 64, 80),
+      runeBlue: this.cropProp(puzImg, 0.91, 0.57, 0.07, 0.18, 64, 80),
+
+      // From hidden_objects.png
+      qvevri: this.cropProp(hidImg, 0.02, 0.65, 0.11, 0.32, 72, 96),
+      horn: this.cropProp(hidImg, 0.15, 0.65, 0.11, 0.32, 72, 96),
+      book: this.cropProp(hidImg, 0.47, 0.66, 0.10, 0.30, 72, 96),
+      coin: this.cropProp(hidImg, 0.69, 0.68, 0.09, 0.28, 72, 72),
+      compass: this.cropProp(hidImg, 0.88, 0.66, 0.10, 0.30, 72, 88)
+    };
+    return this.props;
+  },
+
   getDiffConfig() {
     const diff = LL.getDifficulty ? LL.getDifficulty() : 'normal';
     const lvlScale = Math.min(4, Math.floor((this.level.n - 1) / 3));
@@ -61,9 +122,9 @@ LL.engine = {
       return { id: 'easy', label: 'მარტივი', rounds: 6, decoys: 2, useTimer: false, timeSec: 0, autoHint: true };
     }
     if (diff === 'challenge') {
-      return { id: 'challenge', label: 'რთული', rounds: 8 + Math.min(2, lvlScale), decoys: 5, useTimer: true, timeSec: Math.max(42, 66 - lvlScale * 6), autoHint: false };
+      return { id: 'challenge', label: 'რთული', rounds: 8 + Math.min(2, lvlScale), decoys: 5, useTimer: true, timeSec: Math.max(45, 70 - lvlScale * 6), autoHint: false };
     }
-    return { id: 'normal', label: 'საშუალო', rounds: 7 + Math.min(1, lvlScale), decoys: 3, useTimer: this.level.n >= 6, timeSec: Math.max(58, 84 - lvlScale * 5), autoHint: false };
+    return { id: 'normal', label: 'საშუალო', rounds: 7 + Math.min(1, lvlScale), decoys: 3, useTimer: this.level.n >= 6, timeSec: Math.max(60, 88 - lvlScale * 5), autoHint: false };
   },
 
   async startLevel(levelNum) {
@@ -155,18 +216,13 @@ LL.engine = {
     this.bindUI();
     this.renderHudLetters([]);
 
-    const mgManifest = LL.assets.manifest.minigames || {};
-    const [layers, sheets, puzzleImg, memoryImg, mazeImg, hiddenImg] = await Promise.all([
+    const [layers, sheets] = await Promise.all([
       LL.assets.preloadScene(lvl.id),
       LL.assets.preloadSheets(),
-      LL.assets.load(mgManifest.puzzle),
-      LL.assets.load(mgManifest.memory),
-      LL.assets.load(mgManifest.maze),
-      LL.assets.load(mgManifest.hidden)
+      this.loadMinigameProps()
     ]);
     this.layers = layers;
     this.sheets = sheets;
-    this.mgArt = { puzzle: puzzleImg, memory: memoryImg, maze: mazeImg, hidden: hiddenImg };
 
     this.player = LL.sprites.createActor('player', 'idle', 8);
     this.iakob = LL.sprites.createActor('iakob', 'talk', 6);
@@ -174,7 +230,7 @@ LL.engine = {
 
     this.setupWorldForLevel();
     this.startDialogue(lvl.intro, () => {
-      if (this.level.mechanic === 'collect_and_recognize') this.mode = 'play';
+      if (this.level.n === 1) this.mode = 'play';
       else this.launchLevelMinigame();
     });
 
@@ -331,64 +387,34 @@ LL.engine = {
     const plats = platsByLevel[this.level.n] || platsByLevel[1];
     this.platforms = plats.map(([x, y, w]) => ({ x, y, w, h: 16 }));
 
-    // 1. Moving clouds (Every level)
     this.clouds = Array.from({ length: 5 }, (_, i) => ({
-      x: i * 230,
-      y: 34 + (i % 3) * 26,
-      speed: 10 + (i % 3) * 5,
-      scale: 0.85 + (i % 2) * 0.35
+      x: i * 230, y: 34 + (i % 3) * 26, speed: 10 + (i % 3) * 5, scale: 0.85 + (i % 2) * 0.35
     }));
-
-    // 2. Floating golden particles (All magical scenes)
     this.goldenParticles = Array.from({ length: 22 }, () => ({
-      x: Math.random() * this.W,
-      y: Math.random() * (this.H - 85),
-      r: 1.5 + Math.random() * 2,
-      vx: -10 + Math.random() * 20,
-      vy: -14 - Math.random() * 18,
-      phase: Math.random() * Math.PI * 2
+      x: Math.random() * this.W, y: Math.random() * (this.H - 85),
+      vx: -10 + Math.random() * 20, vy: -14 - Math.random() * 18, phase: Math.random() * Math.PI * 2
     }));
-
-    // 3. Falling leaves (Borjomi = 3, Racha = 6)
     this.leaves = (this.level.n === 3 || this.level.n === 6)
       ? Array.from({ length: 18 }, () => ({
-          x: Math.random() * this.W,
-          y: Math.random() * this.H,
-          vy: 28 + Math.random() * 26,
-          sway: Math.random() * Math.PI * 2,
+          x: Math.random() * this.W, y: Math.random() * this.H,
+          vy: 28 + Math.random() * 26, sway: Math.random() * Math.PI * 2,
           color: Math.random() > 0.45 ? '#e07a22' : '#4a9e38'
         }))
       : [];
-
-    // 4. Falling snow (Svaneti = 8)
     this.snowflakes = this.level.n === 8
       ? Array.from({ length: 36 }, () => ({
-          x: Math.random() * this.W,
-          y: Math.random() * this.H,
-          r: 1.5 + Math.random() * 2.5,
-          vy: 32 + Math.random() * 34,
-          drift: Math.random() * Math.PI * 2
+          x: Math.random() * this.W, y: Math.random() * this.H,
+          r: 2 + Math.random() * 2.5, vy: 32 + Math.random() * 34, drift: Math.random() * Math.PI * 2
         }))
       : [];
-
-    // 5. Fireflies (Forest & night levels: Borjomi = 3, Tusheti = 7, Fortress = 11)
     this.fireflies = (this.level.n === 3 || this.level.n === 7 || this.level.n === 11)
       ? Array.from({ length: 18 }, () => ({
-          x: Math.random() * this.W,
-          y: 180 + Math.random() * 270,
-          vx: -18 + Math.random() * 36,
-          vy: -12 + Math.random() * 24,
-          phase: Math.random() * Math.PI * 2
+          x: Math.random() * this.W, y: 180 + Math.random() * 270,
+          vx: -18 + Math.random() * 36, vy: -12 + Math.random() * 24, phase: Math.random() * Math.PI * 2
         }))
       : [];
-
-    // 6. Floating books (Mtskheta Lost Library = 4)
     this.floatingBooks = this.level.n === 4
-      ? Array.from({ length: 5 }, (_, i) => ({
-          x: 160 + i * 175,
-          y: 120 + (i % 2) * 55,
-          phase: i * 1.3
-        }))
+      ? Array.from({ length: 5 }, (_, i) => ({ x: 160 + i * 175, y: 120 + (i % 2) * 55, phase: i * 1.3 }))
       : [];
 
     this.pickups = this.levelLetters.map((l, idx) => {
@@ -406,7 +432,7 @@ LL.engine = {
   collectWorldPickup(p) {
     if (p.collected) return;
     p.collected = true;
-    if (LL.audio && LL.audio.play) LL.audio.play('collect');
+    if (LL.audio) LL.audio.play('collect');
     this.player.setAnim('celebrate');
     const gotIds = this.pickups.filter(x => x.collected).map(x => x.letter.id);
     this.renderHudLetters(gotIds);
@@ -427,7 +453,7 @@ LL.engine = {
       if (this.keys.jump && this.onGround) {
         this.vy = -520;
         this.onGround = false;
-        if (LL.audio && LL.audio.play) LL.audio.play('jump');
+        if (LL.audio) LL.audio.play('jump');
       }
 
       this.vy += 1280 * dt;
@@ -480,19 +506,16 @@ LL.engine = {
     this.animClock = (this.animClock || 0) + dt;
     const n = this.level.n;
 
-    // 1. Moving clouds (Every level)
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
     for (const c of (this.clouds || [])) {
       c.x = (c.x + c.speed * dt) % (this.W + 160);
-      const cx = c.x - 80;
-      const s = c.scale;
+      const cx = c.x - 80, s = c.scale;
       ctx.fillRect(Math.round(cx), Math.round(c.y), Math.round(76 * s), Math.round(16 * s));
       ctx.fillRect(Math.round(cx + 14 * s), Math.round(c.y - 10 * s), Math.round(46 * s), Math.round(12 * s));
     }
     ctx.restore();
 
-    // 2. Waterfall movement (Mountain levels: Tusheti=7, Svaneti=8, Javakheti=10)
     if (n === 7 || n === 8 || n === 10) {
       const wx = Math.round(740 - this.cameraX * 0.45);
       ctx.save();
@@ -506,19 +529,16 @@ LL.engine = {
       ctx.restore();
     }
 
-    // 3. Glowing castle windows (Final level = 11)
     if (n === 11) {
       const pulse = 0.45 + 0.35 * Math.sin(this.animClock * 3);
       ctx.save();
       ctx.fillStyle = `rgba(255, 212, 72, ${pulse.toFixed(2)})`;
       [[420, 210], [490, 195], [560, 210], [630, 225]].forEach(([wx, wy]) => {
-        const sx = Math.round(wx - this.cameraX * 0.5);
-        ctx.fillRect(sx, wy, 14, 22);
+        ctx.fillRect(Math.round(wx - this.cameraX * 0.5), wy, 14, 22);
       });
       ctx.restore();
     }
 
-    // 4. Floating books (Library level = 4)
     for (const fb of (this.floatingBooks || [])) {
       const fy = fb.y + Math.sin(this.animClock * 2.2 + fb.phase) * 10;
       ctx.save();
@@ -530,7 +550,6 @@ LL.engine = {
       ctx.restore();
     }
 
-    // 5. Moving river (Racha = 6) vs standard ground strip
     if (n === 6) {
       ctx.save();
       ctx.fillStyle = 'rgba(36, 138, 196, 0.45)';
@@ -538,8 +557,7 @@ LL.engine = {
       ctx.fillStyle = 'rgba(205, 244, 255, 0.6)';
       for (let i = 0; i < 16; i++) {
         const rx = ((i * 68 + this.animClock * 95) % (this.W + 40)) - 20;
-        const ry = 482 + (i % 4) * 14;
-        ctx.fillRect(Math.round(rx), ry, 28, 3);
+        ctx.fillRect(Math.round(rx), 482 + (i % 4) * 14, 28, 3);
       }
       ctx.restore();
     } else {
@@ -547,7 +565,6 @@ LL.engine = {
       ctx.fillRect(0, 466, this.W, 74);
     }
 
-    // 6. Gentle grass movement (Kakheti = 1)
     if (n === 1) {
       ctx.save();
       ctx.fillStyle = '#4e9c38';
@@ -559,7 +576,6 @@ LL.engine = {
       ctx.restore();
     }
 
-    // 7. Elevated platforms
     for (const pl of (this.platforms || [])) {
       const sx = Math.round(pl.x - this.cameraX);
       ctx.fillStyle = '#3a2714';
@@ -568,7 +584,6 @@ LL.engine = {
       ctx.fillRect(sx, pl.y, pl.w, pl.h);
     }
 
-    // 8. Floating golden particles (All magical scenes)
     ctx.save();
     for (const gp of (this.goldenParticles || [])) {
       gp.x = (gp.x + gp.vx * dt + this.W) % this.W;
@@ -579,7 +594,6 @@ LL.engine = {
     }
     ctx.restore();
 
-    // 9. Falling leaves (Borjomi = 3, Racha = 6)
     for (const lf of (this.leaves || [])) {
       lf.y = (lf.y + lf.vy * dt) % (this.H - 60);
       lf.x = (lf.x + Math.sin(this.animClock * 2 + lf.sway) * 22 * dt + this.W) % this.W;
@@ -587,7 +601,6 @@ LL.engine = {
       ctx.fillRect(Math.round(lf.x), Math.round(lf.y), 6, 4);
     }
 
-    // 10. Falling snow (Svaneti = 8)
     if (this.snowflakes && this.snowflakes.length) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
       for (const sf of this.snowflakes) {
@@ -597,7 +610,6 @@ LL.engine = {
       }
     }
 
-    // 11. Fireflies (Forest & night levels)
     for (const ff of (this.fireflies || [])) {
       ff.x = (ff.x + ff.vx * dt + this.W) % this.W;
       ff.y = Math.max(150, Math.min(450, ff.y + ff.vy * dt));
@@ -707,19 +719,81 @@ LL.engine = {
     }
   },
 
-  /* Helper: returns decoys strictly from learnedPool (never future unlearned letters) */
   pickLearnedDecoys(excludeIds, count) {
     const candidates = this.learnedPool.filter(l => !excludeIds.includes(l.id));
     return candidates.sort(() => Math.random() - 0.5).slice(0, count);
   },
 
-  cardBgStyle(kind) {
-    const img = this.mgArt && this.mgArt[kind];
-    if (!img) return '';
-    return `background-image:linear-gradient(rgba(244,232,200,.88),rgba(232,214,166,.92)),url('${img.src}');background-size:cover;background-position:center;`;
+  /* Builds a distinct, region-specific multi-stage curriculum (6-10 stages) for each of the 11 regions */
+  buildCurriculumForLevel(cfg) {
+    const L = this.levelLetters;
+    const n = this.level.n;
+
+    // Each region starts with its signature pixel-art minigame, followed by tailored reinforcement stages!
+    const plans = {
+      1: [ // Kakheti: Qvevri Treasure Jars + Sound Recognition
+        { kind: 'qvevri_jars' },
+        { kind: 'recognize', target: L[0] }, { kind: 'recognize', target: L[1] }, { kind: 'recognize', target: L[2] },
+        { kind: 'missing', target: L[0] }, { kind: 'build', target: L[1] }
+      ],
+      2: [ // Tbilisi: Carved Wooden Rune Board Word Builder
+        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] },
+        { kind: 'missing', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'recognize', target: L[2] }
+      ],
+      3: [ // Borjomi: Hidden Relics in the Forest (Lantern, Compass, Horn, Qvevri, Book)
+        { kind: 'hidden_relics' },
+        { kind: 'recognize', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'wood_board', target: L[2] },
+        { kind: 'recognize', target: L[1] }, { kind: 'missing', target: L[2] }
+      ],
+      4: [ // Mtskheta: Ornate Carved Wooden Card Memory Match
+        { kind: 'ornate_memory' },
+        { kind: 'recognize', target: L[0] }, { kind: 'recognize', target: L[1] }, { kind: 'wood_board', target: L[2] },
+        { kind: 'missing', target: L[0] }, { kind: 'wood_board', target: L[1] }
+      ],
+      5: [ // Vardzia: Locked Doors & Golden Keys Cipher
+        { kind: 'key_locks' },
+        { kind: 'missing', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'missing', target: L[2] },
+        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[2] }
+      ],
+      6: [ // Racha: Flowing River Scrolls & Lantern Catch
+        { kind: 'river_scrolls' },
+        { kind: 'recognize', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'wood_board', target: L[2] },
+        { kind: 'recognize', target: L[2] }, { kind: 'wood_board', target: L[0] }
+      ],
+      7: [ // Tusheti: Stone-Wall & Grass Dungeon Tile Maze
+        { kind: 'stone_maze' },
+        { kind: 'key_locks' },
+        { kind: 'recognize', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'wood_board', target: L[2] },
+        { kind: 'missing', target: L[2] }
+      ],
+      8: [ // Svaneti: Glowing Runestone & Sun/Gem Pressure Plates
+        { kind: 'runestone_plates', target: L[0] }, { kind: 'runestone_plates', target: L[1] }, { kind: 'runestone_plates', target: L[2] },
+        { kind: 'ornate_memory' },
+        { kind: 'wood_board', target: L[1] }, { kind: 'missing', target: L[2] }
+      ],
+      9: [ // Adjara: 3-Lock Treasure Chest Forging
+        { kind: 'treasure_chest' },
+        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] },
+        { kind: 'missing', target: L[0] }, { kind: 'recognize', target: L[2] }
+      ],
+      10: [ // Javakheti: Paravani Compass & Multi-Skill Gauntlet
+        { kind: 'hidden_relics' }, { kind: 'key_locks' }, { kind: 'ornate_memory' },
+        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] }
+      ],
+      11: [ // Final Fortress: 3 Seals of Asotsqlapia's Saddlebag
+        { kind: 'treasure_chest' }, { kind: 'runestone_plates', target: L[0] }, { kind: 'runestone_plates', target: L[1] },
+        { kind: 'runestone_plates', target: L[2] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] }
+      ]
+    };
+
+    const list = [...(plans[n] || plans[1])];
+    while (list.length < cfg.rounds) {
+      const pick = L[list.length % 3];
+      list.push({ kind: list.length % 2 === 0 ? 'wood_board' : 'missing', target: pick });
+    }
+    return list.slice(0, cfg.rounds);
   },
 
-  /* Multi-Stage Level Curriculum (6 to 10 progressive stages reinforcing ONLY the 3 target letters) */
   launchLevelMinigame() {
     if (this.mode === 'minigame') return;
     this.mode = 'minigame';
@@ -728,37 +802,8 @@ LL.engine = {
     box.hidden = false;
 
     const cfg = this.getDiffConfig();
-    const stages = [];
-
-    // Stage 1-3: Recognize each of the 3 target letters
-    this.levelLetters.forEach(l => {
-      stages.push({ kind: 'recognize', target: l });
-    });
-
-    // Stage 4-6: Region-specific activity + missing-letter & word-building reinforcement
-    if (this.level.mechanic === 'maze_challenge') {
-      stages.push({ kind: 'maze' });
-      stages.push({ kind: 'missing', target: this.levelLetters[0] });
-      stages.push({ kind: 'build', target: this.levelLetters[2] });
-    } else if (this.level.mechanic === 'object_discovery') {
-      stages.push({ kind: 'discovery' });
-      stages.push({ kind: 'missing', target: this.levelLetters[1] });
-      stages.push({ kind: 'build', target: this.levelLetters[2] });
-    } else if (this.level.mechanic === 'falling_letters') {
-      stages.push({ kind: 'falling' });
-      stages.push({ kind: 'missing', target: this.levelLetters[0] });
-      stages.push({ kind: 'build', target: this.levelLetters[1] });
-    } else {
-      this.levelLetters.forEach((l, idx) => {
-        stages.push({ kind: idx % 2 === 0 ? 'missing' : 'build', target: l });
-      });
-    }
-
-    // Stage 7+: Extra synthesis stages for Normal / Challenge difficulties
-    if (cfg.rounds >= 7) stages.push({ kind: 'memory' });
-    if (cfg.rounds >= 8) stages.push({ kind: 'build', target: this.levelLetters[2] });
-    if (cfg.rounds >= 9) stages.push({ kind: 'recognize', target: this.levelLetters[1] });
-    if (cfg.rounds >= 10) stages.push({ kind: 'build', target: this.levelLetters[0] });
+    const stages = this.buildCurriculumForLevel(cfg);
+    const P = this.props;
 
     let stageIdx = 0;
     let timeLeft = cfg.timeSec;
@@ -770,7 +815,6 @@ LL.engine = {
         timeLeft--;
         const cEl = box.querySelector('#mgClock');
         if (cEl) cEl.textContent = `⏱ ${timeLeft} წმ`;
-        // Child-friendly: never fail permanently on timeout — grant encouraging +25s extension
         if (timeLeft <= 0) {
           timeLeft = 25;
           const fb = box.querySelector('#mgFeedback');
@@ -794,108 +838,101 @@ LL.engine = {
       const st = stages[stageIdx];
       const headerHTML = `
         <div class="mg-top">
-          <span>ეტაპი ${stageIdx + 1} / ${stages.length} · ${cfg.label}</span>
+          <span>${this.level.region} · ეტაპი ${stageIdx + 1} / ${stages.length} (${cfg.label})</span>
           ${cfg.useTimer ? `<span id="mgClock">⏱ ${timeLeft} წმ</span>` : '<span>🌿 თავისუფალი დრო</span>'}
           <button type="button" class="btn alt sm" id="mgHintBtn">💡 მინიშნება</button>
         </div>
       `;
 
-      if (st.kind === 'recognize') {
-        const t = st.target;
-        const decoys = this.pickLearnedDecoys([t.id], cfg.decoys);
-        const opts = [t, ...decoys].sort(() => Math.random() - 0.5);
+      // 1. QVEVRI JARS (Kakheti)
+      if (st.kind === 'qvevri_jars') {
+        const opened = new Set();
+        const items = [
+          { letter: this.levelLetters[0], real: true },
+          { letter: this.levelLetters[1], real: true },
+          { letter: this.levelLetters[2], real: true },
+          ...this.pickLearnedDecoys(this.level.letters, 2).map(l => ({ letter: l, real: false }))
+        ].sort(() => Math.random() - 0.5);
 
-        box.innerHTML = `
-          <div class="panel mg-card rpg-box" style="${this.cardBgStyle('puzzle')}">
-            ${headerHTML}
-            <p>იპოვე ასო: <b>„${t.name}“</b> — სიტყვაში <b>„${t.word}“</b></p>
-            <div class="mg-choices">
-              ${opts.map(o => `<button type="button" class="btn big" data-oid="${o.id}">${o.char}</button>`).join('')}
+        const paint = () => {
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <p>გახსენი ქვევრები და იპოვე კახეთის სამი ასო: <b>${this.levelLetters.map(l => `${l.char} (${l.name})`).join(', ')}</b></p>
+              <div class="prop-shelf">
+                ${items.map((it, i) => `
+                  <button type="button" class="prop-item-btn ${opened.has(i) ? 'opened' : ''}" data-qi="${i}">
+                    ${P.qvevri ? `<img src="${P.qvevri}" alt="ქვევრი" class="px-prop">` : '🏺'}
+                    <span class="prop-badge">${opened.has(i) ? it.letter.char : '?'}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <p class="note" id="mgHintBox"></p>
+              <p class="err" id="mgFeedback"></p>
             </div>
-            <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 მინიშნება: ${t.pronunciation}` : ''}</p>
-            <p class="err" id="mgFeedback"></p>
-          </div>
-        `;
-        box.querySelector('#mgHintBtn').onclick = () => {
-          box.querySelector('#mgHintBox').textContent = `💡 მინიშნება: ასო „${t.char}“ (${t.name}) — ${t.pronunciation}. ${t.hint}.`;
-        };
-        box.querySelectorAll('[data-oid]').forEach(btn => {
-          btn.onclick = () => {
-            const chosen = opts.find(x => x.id === Number(btn.dataset.oid));
-            if (chosen.id === t.id) {
-              if (LL.audio) LL.audio.play('correct');
-              advanceStage();
-            } else {
-              this.mistakes++;
-              if (LL.audio) LL.audio.play('wrong');
-              box.querySelector('#mgFeedback').textContent = `ეს არის „${chosen.char}“ (${chosen.name}). ჩვენ ვეძებთ „${t.name}“-ს — სცადე კიდევ ერთხელ!`;
-            }
+          `;
+          box.querySelector('#mgHintBtn').onclick = () => {
+            box.querySelector('#mgHintBox').textContent = `💡 კახეთის ასოებია: ${this.levelLetters.map(l => `${l.char} (${l.name})`).join(', ')}`;
           };
-        });
+          box.querySelectorAll('[data-qi]').forEach(b => {
+            b.onclick = () => {
+              const i = Number(b.dataset.qi);
+              if (opened.has(i)) return;
+              opened.add(i);
+              const it = items[i];
+              if (it.real) {
+                if (LL.audio) LL.audio.play('collect');
+                const foundCount = [...opened].filter(idx => items[idx].real).length;
+                if (foundCount >= 3) setTimeout(advanceStage, 350);
+                else paint();
+              } else {
+                if (LL.audio) LL.audio.play('click');
+                paint();
+                box.querySelector('#mgFeedback').textContent = `ამ ქვევრში „${it.letter.char}“ იყო — განაგრძე ძებნა!`;
+              }
+            };
+          });
+        };
+        paint();
         return;
       }
 
-      if (st.kind === 'missing') {
-        const t = st.target;
-        const masked = '_' + t.word.slice(1);
-        const decoys = this.pickLearnedDecoys([t.id], cfg.decoys);
-        const opts = [t, ...decoys].sort(() => Math.random() - 0.5);
-
-        box.innerHTML = `
-          <div class="panel mg-card rpg-box" style="${this.cardBgStyle('puzzle')}">
-            ${headerHTML}
-            <p>ჩასვი გამოტოვებული ასო სიტყვაში: <b class="big-word">${masked}</b> (${t.hint})</p>
-            <div class="mg-choices">
-              ${opts.map(o => `<button type="button" class="btn big" data-oid="${o.id}">${o.char}</button>`).join('')}
-            </div>
-            <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 სიტყვა იწყება ასოთი „${t.name}“` : ''}</p>
-            <p class="err" id="mgFeedback"></p>
-          </div>
-        `;
-        box.querySelector('#mgHintBtn').onclick = () => {
-          box.querySelector('#mgHintBox').textContent = `💡 მინიშნება: სრული სიტყვაა „${t.word}“ (${t.syllables}) — პირველი ასოა „${t.char}“.`;
-        };
-        box.querySelectorAll('[data-oid]').forEach(btn => {
-          btn.onclick = () => {
-            const chosen = opts.find(x => x.id === Number(btn.dataset.oid));
-            if (chosen.id === t.id) {
-              if (LL.audio) LL.audio.play('correct');
-              advanceStage();
-            } else {
-              this.mistakes++;
-              if (LL.audio) LL.audio.play('wrong');
-              box.querySelector('#mgFeedback').textContent = `„${chosen.char}“ აქ არ უხდება. მოუსმინე სიტყვის დასაწყისს: ${t.syllables}!`;
-            }
-          };
-        });
-        return;
-      }
-
-      if (st.kind === 'build') {
+      // 2. CARVED WOODEN RUNE BOARD (Tbilisi & Word Construction)
+      if (st.kind === 'wood_board' || st.kind === 'build') {
         const t = st.target;
         const letters = t.word.split('');
-        const extraDecoys = this.pickLearnedDecoys([t.id], Math.max(1, cfg.decoys - 1)).map(x => x.char);
-        const bank = [...letters, ...extraDecoys].sort(() => Math.random() - 0.5);
+        const extra = this.pickLearnedDecoys([t.id], Math.max(1, cfg.decoys - 1)).map(x => x.char);
+        const bank = [...letters, ...extra].sort(() => Math.random() - 0.5);
         let current = [];
 
-        const paintBuild = () => {
+        const paintBoard = () => {
           box.innerHTML = `
-            <div class="panel mg-card rpg-box" style="${this.cardBgStyle('puzzle')}">
+            <div class="panel mg-card rpg-box">
               ${headerHTML}
-              <p>ააწყვე სიტყვა: <b>${t.hint}</b> (${letters.length} ასო)</p>
-              <div class="mg-slots">${letters.map((_, i) => `<span class="mg-slot">${current[i] ? current[i].ch : '_'}</span>`).join('')}</div>
+              <p>მოჩუქურთმებულ დაფაზე ააწყვე სიტყვა: <b>${t.hint}</b> (${letters.length} ასო)</p>
+              <div class="wood-slots-row">
+                ${letters.map((_, i) => `
+                  <div class="wood-slot" style="${P.slotTile ? `background-image:url('${P.slotTile}')` : ''}">
+                    <span>${current[i] ? current[i].ch : ''}</span>
+                  </div>
+                `).join('')}
+              </div>
               <div class="mg-choices">
-                ${bank.map((ch, idx) => `<button type="button" class="btn" data-bidx="${idx}" ${current.some(c => c.idx === idx) ? 'disabled' : ''}>${ch}</button>`).join('')}
-                <button type="button" class="btn alt" id="mgClear">↺ გასუფთავება</button>
+                ${bank.map((ch, idx) => `
+                  <button type="button" class="rune-tile-btn" style="${P.woodRune ? `background-image:url('${P.woodRune}')` : ''}" data-bidx="${idx}" ${current.some(c => c.idx === idx) ? 'disabled' : ''}>
+                    ${ch}
+                  </button>
+                `).join('')}
+                <button type="button" class="btn alt sm" id="mgClear">↺</button>
               </div>
               <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 დამარცვლა: ${t.syllables}` : ''}</p>
               <p class="err" id="mgFeedback"></p>
             </div>
           `;
           box.querySelector('#mgHintBtn').onclick = () => {
-            box.querySelector('#mgHintBox').textContent = `💡 მინიშნება: სიტყვა იწერება ასე — ${t.syllables} (${t.word}).`;
+            box.querySelector('#mgHintBox').textContent = `💡 მინიშნება: ${t.syllables} (${t.word})`;
           };
-          box.querySelector('#mgClear').onclick = () => { current = []; paintBuild(); };
+          box.querySelector('#mgClear').onclick = () => { current = []; paintBoard(); };
           box.querySelectorAll('[data-bidx]').forEach(b => {
             b.onclick = () => {
               if (LL.audio) LL.audio.play('click');
@@ -910,38 +947,96 @@ LL.engine = {
                   this.mistakes++;
                   if (LL.audio) LL.audio.play('wrong');
                   current = [];
-                  paintBuild();
-                  box.querySelector('#mgFeedback').textContent = `კარგი მცდელობაა! სცადე თავიდან — დამარცვლა დაგეხმარება: ${t.syllables}`;
+                  paintBoard();
+                  box.querySelector('#mgFeedback').textContent = `სცადე თავიდან — დამარცვლა: ${t.syllables}`;
                 }
               } else {
-                paintBuild();
+                paintBoard();
               }
             };
           });
         };
-        paintBuild();
+        paintBoard();
         return;
       }
 
-      if (st.kind === 'memory') {
+      // 3. HIDDEN RELICS IN FOREST (Borjomi & Javakheti)
+      if (st.kind === 'hidden_relics') {
+        const found = new Set();
+        const decoys = this.pickLearnedDecoys(this.level.letters, 2);
+        const relics = [
+          { left: '15%', top: '32%', img: P.lantern, letter: this.levelLetters[0], real: true },
+          { left: '48%', top: '65%', img: P.compass, letter: this.levelLetters[1], real: true },
+          { left: '82%', top: '34%', img: P.horn, letter: this.levelLetters[2], real: true },
+          { left: '30%', top: '70%', img: P.book, letter: decoys[0] || this.levelLetters[0], real: !decoys[0] },
+          { left: '68%', top: '26%', img: P.coin, letter: decoys[1] || this.levelLetters[1], real: !decoys[1] }
+        ];
+
+        const paintRelics = () => {
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <p>იპოვე ნივთებში დამალული ასოები: <b>${this.levelLetters.map(l => `${l.char} (${l.name})`).join(', ')}</b></p>
+              <div class="mg-forest">
+                ${relics.map((r, i) => `
+                  <button type="button" class="relic-spot ${found.has(i) ? 'found' : ''}" style="left:${r.left};top:${r.top}" data-ri="${i}">
+                    ${r.img ? `<img src="${r.img}" alt="ნივთი" class="px-prop sm">` : '✨'}
+                    <span class="prop-badge">${found.has(i) ? r.letter.char : r.letter.char}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <p class="note" id="mgHintBox"></p>
+              <p class="err" id="mgFeedback"></p>
+            </div>
+          `;
+          box.querySelector('#mgHintBtn').onclick = () => {
+            box.querySelector('#mgHintBox').textContent = `💡 აირჩიე ნივთები ასოებით: ${this.levelLetters.map(l => l.char).join(', ')}`;
+          };
+          box.querySelectorAll('[data-ri]').forEach(btn => {
+            btn.onclick = () => {
+              const i = Number(btn.dataset.ri);
+              const r = relics[i];
+              if (found.has(i)) return;
+              if (!r.real) {
+                this.mistakes++;
+                if (LL.audio) LL.audio.play('wrong');
+                box.querySelector('#mgFeedback').textContent = `„${r.letter.char}“ წინა კუთხის ასოა! ახლა ვეძებთ: ${this.levelLetters.map(l => l.char).join(', ')}`;
+                return;
+              }
+              found.add(i);
+              if (LL.audio) LL.audio.play('collect');
+              if (found.size >= 3) setTimeout(advanceStage, 300);
+              else paintRelics();
+            };
+          });
+        };
+        paintRelics();
+        return;
+      }
+
+      // 4. ORNATE WOODEN MEMORY CARDS (Mtskheta)
+      if (st.kind === 'ornate_memory') {
         const cards = [];
         this.levelLetters.forEach(l => {
-          cards.push({ pair: l.id, text: l.char });
-          cards.push({ pair: l.id, text: l.name });
+          cards.push({ pair: l.id, text: l.char, isBig: true });
+          cards.push({ pair: l.id, text: l.name, isBig: false });
         });
         cards.sort(() => Math.random() - 0.5);
         const matched = new Set();
         let flipped = [];
 
-        const paintMem = () => {
+        const paintCards = () => {
           box.innerHTML = `
-            <div class="panel mg-card rpg-box" style="${this.cardBgStyle('memory')}">
+            <div class="panel mg-card rpg-box">
               ${headerHTML}
-              <p>დააწყვილე ამ კუთხის სამივე ასო მის სახელთან (${matched.size}/3):</p>
-              <div class="mg-memory-grid">
+              <p>გადააბრუნე ხის ბანქოები და დააწყვილე ასო მის სახელთან (${matched.size}/3):</p>
+              <div class="ornate-cards-grid">
                 ${cards.map((c, idx) => {
                   const open = matched.has(c.pair) || flipped.includes(idx);
-                  return `<button type="button" class="btn ${open ? '' : 'alt'} mem-card" data-cidx="${idx}">${open ? c.text : '📜'}</button>`;
+                  const bg = open ? P.cardFront : P.cardBack;
+                  return `<button type="button" class="ornate-card ${open ? 'open' : ''}" style="${bg ? `background-image:url('${bg}')` : ''}" data-cidx="${idx}">
+                    <span>${open ? c.text : ''}</span>
+                  </button>`;
                 }).join('')}
               </div>
               <p class="note" id="mgHintBox"></p>
@@ -956,79 +1051,232 @@ LL.engine = {
               if (flipped.length >= 2 || flipped.includes(idx) || matched.has(cards[idx].pair)) return;
               if (LL.audio) LL.audio.play('click');
               flipped.push(idx);
-              paintMem();
+              paintCards();
               if (flipped.length === 2) {
                 const [a, b] = flipped;
                 if (cards[a].pair === cards[b].pair) {
-                  if (LL.audio) LL.audio.play('correct');
+                  if (LL.audio) LL.audio.play('collect');
                   matched.add(cards[a].pair);
                   flipped = [];
                   if (matched.size === 3) setTimeout(advanceStage, 300);
-                  else paintMem();
+                  else paintCards();
                 } else {
-                  setTimeout(() => { flipped = []; paintMem(); }, 550);
+                  setTimeout(() => { flipped = []; paintCards(); }, 550);
                 }
               }
             };
           });
         };
-        paintMem();
+        paintCards();
         return;
       }
 
-      if (st.kind === 'discovery') {
-        const found = new Set();
-        const decoys = this.pickLearnedDecoys(this.level.letters, 2);
-        const spots = [
-          { left: '16%', top: '30%', letter: this.levelLetters[0], real: true },
-          { left: '50%', top: '64%', letter: this.levelLetters[1], real: true },
-          { left: '82%', top: '36%', letter: this.levelLetters[2], real: true }
-        ];
-        if (decoys[0]) spots.push({ left: '34%', top: '68%', letter: decoys[0], real: false });
-        if (decoys[1]) spots.push({ left: '68%', top: '26%', letter: decoys[1], real: false });
+      // 5. LOCKED GATES & ORNATE KEYS (Vardzia)
+      if (st.kind === 'key_locks') {
+        let lockIdx = 0;
+        const paintLocks = () => {
+          if (lockIdx >= 3) return advanceStage();
+          const target = this.levelLetters[lockIdx];
+          const decoys = this.pickLearnedDecoys([target.id], Math.min(3, cfg.decoys));
+          const keys = [target, ...decoys].sort(() => Math.random() - 0.5);
 
-        const paintDisc = () => {
           box.innerHTML = `
-            <div class="panel mg-card rpg-box" style="${this.cardBgStyle('hidden')}">
+            <div class="panel mg-card rpg-box">
               ${headerHTML}
-              <p>აღმოაჩინე ამ კუთხის 3 ასო: <b>${this.levelLetters.map(l => `${l.char} (${l.name})`).join(', ')}</b></p>
-              <div class="mg-forest">
-                ${spots.map((s, i) => `
-                  <button type="button" class="forest-spot ${found.has(i) ? 'found' : ''}" style="left:${s.left};top:${s.top}" data-spot="${i}">
-                    ${found.has(i) ? `${s.letter.char} ✓` : s.letter.char}
+              <p>გახსენი კლდის კარიბჭე (${lockIdx + 1}/3): რომელი გასაღები ავსებს სიტყვას <b>„_${target.word.slice(1)}“</b>?</p>
+              <div class="locks-row">
+                ${this.levelLetters.map((l, i) => `
+                  <div class="lock-box">
+                    <img src="${i < lockIdx ? P.lockOpen : P.lockClosed}" alt="ბოქლომი" class="px-prop">
+                    <span>${i < lockIdx ? l.word : `_${l.word.slice(1)}`}</span>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="keys-row">
+                ${keys.map(k => `
+                  <button type="button" class="key-btn" data-kid="${k.id}">
+                    ${P.goldKey ? `<img src="${P.goldKey}" alt="გასაღები" class="px-prop wide">` : '🗝️'}
+                    <b>${k.char}</b>
                   </button>
                 `).join('')}
               </div>
-              <p class="note" id="mgHintBox"></p>
+              <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 გასაღები: „${target.name}“` : ''}</p>
               <p class="err" id="mgFeedback"></p>
             </div>
           `;
           box.querySelector('#mgHintBtn').onclick = () => {
-            box.querySelector('#mgHintBox').textContent = `💡 ვეძებთ მხოლოდ: ${this.levelLetters.map(l => l.char).join(', ')}`;
+            box.querySelector('#mgHintBox').textContent = `💡 მინიშნება: სიტყვაა „${target.word}“ — აირჩიე გასაღები „${target.char}“ (${target.name})`;
           };
-          box.querySelectorAll('[data-spot]').forEach(btn => {
+          box.querySelectorAll('[data-kid]').forEach(btn => {
             btn.onclick = () => {
-              const i = Number(btn.dataset.spot);
-              const s = spots[i];
-              if (found.has(i)) return;
-              if (!s.real) {
+              if (Number(btn.dataset.kid) === target.id) {
+                if (LL.audio) LL.audio.play('unlock');
+                lockIdx++;
+                paintLocks();
+              } else {
                 this.mistakes++;
                 if (LL.audio) LL.audio.play('wrong');
-                box.querySelector('#mgFeedback').textContent = `„${s.letter.char}“ (${s.letter.name}) უკვე ნასწავლი ასოა — ახლა ვეძებთ: ${this.levelLetters.map(l => l.char).join(', ')}`;
-                return;
+                box.querySelector('#mgFeedback').textContent = 'ეს გასაღები ამ ბოქლომს არ ერგება — სცადე სხვა!';
               }
-              found.add(i);
-              if (LL.audio) LL.audio.play('collect');
-              if (found.size === 3) setTimeout(advanceStage, 300);
-              else paintDisc();
             };
           });
         };
-        paintDisc();
+        paintLocks();
         return;
       }
 
-      if (st.kind === 'falling') {
+      // 6. STONE-TILE DUNGEON MAZE (Tusheti)
+      if (st.kind === 'stone_maze') {
+        const grid = [
+          [0, 0, 1, 2, 0, 0, 3],
+          [1, 0, 1, 1, 1, 0, 1],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 1, 1, 0, 1, 1, 0],
+          [0, 0, 0, 0, 1, 4, 0]
+        ];
+        let r = 0, c = 0;
+        const collected = new Set();
+
+        const paintMaze = () => {
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <p>გაიარე ქვის კოშკების ლაბირინთი და შეაგროვე სამივე გრაგნილი (${collected.size}/3):</p>
+              <div class="maze-grid">
+                ${grid.map((row, ri) => row.map((cell, ci) => {
+                  const isPlayer = ri === r && ci === c;
+                  const letterObj = cell >= 2 ? this.levelLetters[cell - 2] : null;
+                  const got = letterObj && collected.has(letterObj.id);
+                  const tileBg = cell === 1 ? P.stoneWall : P.grassTile;
+                  return `<div class="maze-cell" style="${tileBg ? `background-image:url('${tileBg}');background-size:cover;` : ''}">
+                    ${isPlayer ? '🧭' : (letterObj && !got ? `<span class="maze-letter">${letterObj.char}</span>` : '')}
+                  </div>`;
+                }).join('')).join('')}
+              </div>
+              <div class="maze-pad">
+                <button type="button" class="btn alt sm" data-mv="-1,0">▲</button>
+                <div>
+                  <button type="button" class="btn alt sm" data-mv="0,-1">◀</button>
+                  <button type="button" class="btn alt sm" data-mv="1,0">▼</button>
+                  <button type="button" class="btn alt sm" data-mv="0,1">▶</button>
+                </div>
+              </div>
+              <p class="note" id="mgHintBox"></p>
+            </div>
+          `;
+          box.querySelector('#mgHintBtn').onclick = () => {
+            box.querySelector('#mgHintBox').textContent = '💡 გამოიყენე ისრები ბალახის ბილიკზე გადასაადგილებლად.';
+          };
+          box.querySelectorAll('[data-mv]').forEach(b => {
+            b.onclick = () => {
+              const [dr, dc] = b.dataset.mv.split(',').map(Number);
+              const nr = r + dr, nc = c + dc;
+              if (nr < 0 || nr >= grid.length || nc < 0 || nc >= grid[0].length || grid[nr][nc] === 1) return;
+              if (LL.audio) LL.audio.play('click');
+              r = nr; c = nc;
+              const val = grid[r][c];
+              if (val >= 2) {
+                const lObj = this.levelLetters[val - 2];
+                if (!collected.has(lObj.id)) {
+                  collected.add(lObj.id);
+                  if (LL.audio) LL.audio.play('collect');
+                }
+              }
+              if (collected.size === 3) setTimeout(advanceStage, 260);
+              else paintMaze();
+            };
+          });
+        };
+        paintMaze();
+        return;
+      }
+
+      // 7. RUNESTONE & PRESSURE PLATES (Svaneti & Final Boss)
+      if (st.kind === 'runestone_plates') {
+        const t = st.target;
+        const decoys = this.pickLearnedDecoys([t.id], cfg.decoys);
+        const opts = [t, ...decoys].sort(() => Math.random() - 0.5);
+
+        box.innerHTML = `
+          <div class="panel mg-card rpg-box">
+            ${headerHTML}
+            <p>გაააქტიურე სწორი ქვის რუნა ასოსთვის: <b>„${t.name}“</b> (${t.pronunciation})</p>
+            <div class="mg-choices">
+              ${opts.map((o, i) => {
+                const plate = i % 2 === 0 ? P.sunTile : P.gemTile;
+                return `<button type="button" class="plate-btn" style="${plate ? `background-image:url('${plate}')` : ''}" data-oid="${o.id}">
+                  <span>${o.char}</span>
+                </button>`;
+              }).join('')}
+            </div>
+            <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 სიტყვა: ${t.word}` : ''}</p>
+            <p class="err" id="mgFeedback"></p>
+          </div>
+        `;
+        box.querySelector('#mgHintBtn').onclick = () => {
+          box.querySelector('#mgHintBox').textContent = `💡 „${t.name}“ იწყებს სიტყვას „${t.word}“ — აირჩიე „${t.char}“`;
+        };
+        box.querySelectorAll('[data-oid]').forEach(btn => {
+          btn.onclick = () => {
+            if (Number(btn.dataset.oid) === t.id) {
+              if (LL.audio) LL.audio.play('correct');
+              advanceStage();
+            } else {
+              this.mistakes++;
+              if (LL.audio) LL.audio.play('wrong');
+              box.querySelector('#mgFeedback').textContent = 'ეს რუნა სხვა ბგერას ეკუთვნის — სცადე კიდევ ერთხელ!';
+            }
+          };
+        });
+        return;
+      }
+
+      // 8. TREASURE CHEST 3-LOCK FORGING (Adjara & Final Fortress)
+      if (st.kind === 'treasure_chest') {
+        let step = 0;
+        const paintChest = () => {
+          if (step >= 3) return advanceStage();
+          const t = this.levelLetters[step];
+          const decoys = this.pickLearnedDecoys([t.id], cfg.decoys);
+          const opts = [t, ...decoys].sort(() => Math.random() - 0.5);
+
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <div class="chest-showcase">
+                <img src="${step === 2 ? P.chestOpen : P.chestClosed}" alt="სკივრი" class="px-prop lg">
+                <p>სკივრის საკეტი ${step + 1}/3: რომელი ასო აკლია სიტყვას <b>„_${t.word.slice(1)}“</b> (${t.hint})?</p>
+              </div>
+              <div class="mg-choices">
+                ${opts.map(o => `<button type="button" class="btn big" data-oid="${o.id}">${o.char}</button>`).join('')}
+              </div>
+              <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 ასო: ${t.name}` : ''}</p>
+              <p class="err" id="mgFeedback"></p>
+            </div>
+          `;
+          box.querySelector('#mgHintBtn').onclick = () => {
+            box.querySelector('#mgHintBox').textContent = `💡 სრული სიტყვაა „${t.word}“ (${t.syllables})`;
+          };
+          box.querySelectorAll('[data-oid]').forEach(btn => {
+            btn.onclick = () => {
+              if (Number(btn.dataset.oid) === t.id) {
+                if (LL.audio) LL.audio.play('unlock');
+                step++;
+                paintChest();
+              } else {
+                this.mistakes++;
+                if (LL.audio) LL.audio.play('wrong');
+                box.querySelector('#mgFeedback').textContent = 'საკეტი არ გაიხსნა — სცადე სხვა ასო!';
+              }
+            };
+          });
+        };
+        paintChest();
+        return;
+      }
+
+      // 9. FALLING RIVER SCROLLS (Racha)
+      if (st.kind === 'river_scrolls') {
         let caughtCount = 0;
         const needed = 6;
         const pool = [...this.levelLetters, ...this.pickLearnedDecoys(this.level.letters, 4)];
@@ -1036,7 +1284,7 @@ LL.engine = {
         box.innerHTML = `
           <div class="panel mg-card rpg-box">
             ${headerHTML}
-            <p>დაიჭირე მხოლოდ: <b>${this.levelLetters.map(t => `${t.char} (${t.name})`).join(', ')}</b> (<span id="catchCnt">0</span>/${needed})</p>
+            <p>დაიჭირე მდინარეზე მოცურავე გრაგნილები: <b>${this.levelLetters.map(t => `${t.char} (${t.name})`).join(', ')}</b> (<span id="catchCnt">0</span>/${needed})</p>
             <div class="mg-sky-catch" id="catchZone"></div>
             <p class="note" id="mgHintBox"></p>
             <p class="err" id="mgFeedback"></p>
@@ -1054,8 +1302,8 @@ LL.engine = {
           const item = pool[Math.floor(Math.random() * pool.length)];
           const drop = document.createElement('button');
           drop.type = 'button';
-          drop.className = 'btn falling-btn';
-          drop.textContent = item.char;
+          drop.className = 'scroll-drop-btn';
+          drop.innerHTML = `${P.scroll ? `<img src="${P.scroll}" alt="გრაგნილი" class="px-prop sm">` : ''}<span>${item.char}</span>`;
           drop.style.left = (10 + Math.random() * 78) + '%';
           drop.onclick = () => {
             if (this.levelLetters.some(t => t.id === item.id)) {
@@ -1081,68 +1329,41 @@ LL.engine = {
         return;
       }
 
-      if (st.kind === 'maze') {
-        const grid = [
-          [0, 0, 1, 2, 0, 0, 3],
-          [1, 0, 1, 1, 1, 0, 1],
-          [0, 0, 0, 0, 0, 0, 0],
-          [0, 1, 1, 0, 1, 1, 0],
-          [0, 0, 0, 0, 1, 4, 0]
-        ];
-        let r = 0, c = 0;
-        const collected = new Set();
+      // 10. STANDARD RECOGNIZE / MISSING FALLBACK STAGES
+      const t = st.target;
+      const isMissing = st.kind === 'missing';
+      const decoys = this.pickLearnedDecoys([t.id], cfg.decoys);
+      const opts = [t, ...decoys].sort(() => Math.random() - 0.5);
 
-        const paintMaze = () => {
-          box.innerHTML = `
-            <div class="panel mg-card rpg-box" style="${this.cardBgStyle('maze')}">
-              ${headerHTML}
-              <p>გაიკვლიე გზა ქვის კოშკებში და შეაგროვე სამივე ასო (${collected.size}/3):</p>
-              <div class="maze-grid">
-                ${grid.map((row, ri) => row.map((cell, ci) => {
-                  const isPlayer = ri === r && ci === c;
-                  const letterObj = cell >= 2 ? this.levelLetters[cell - 2] : null;
-                  const got = letterObj && collected.has(letterObj.id);
-                  return `<div class="maze-cell ${cell === 1 ? 'wall' : 'path'}">
-                    ${isPlayer ? '🧭' : (letterObj && !got ? letterObj.char : '')}
-                  </div>`;
-                }).join('')).join('')}
-              </div>
-              <div class="maze-pad">
-                <button type="button" class="btn alt sm" data-mv="-1,0">▲</button>
-                <div>
-                  <button type="button" class="btn alt sm" data-mv="0,-1">◀</button>
-                  <button type="button" class="btn alt sm" data-mv="1,0">▼</button>
-                  <button type="button" class="btn alt sm" data-mv="0,1">▶</button>
-                </div>
-              </div>
-              <p class="note" id="mgHintBox"></p>
-            </div>
-          `;
-          box.querySelector('#mgHintBtn').onclick = () => {
-            box.querySelector('#mgHintBox').textContent = '💡 გამოიყენე ისრები ქვის კედლების შემოსავლელად.';
-          };
-          box.querySelectorAll('[data-mv]').forEach(b => {
-            b.onclick = () => {
-              const [dr, dc] = b.dataset.mv.split(',').map(Number);
-              const nr = r + dr, nc = c + dc;
-              if (nr < 0 || nr >= grid.length || nc < 0 || nc >= grid[0].length || grid[nr][nc] === 1) return;
-              if (LL.audio) LL.audio.play('click');
-              r = nr; c = nc;
-              const val = grid[r][c];
-              if (val >= 2) {
-                const lObj = this.levelLetters[val - 2];
-                if (!collected.has(lObj.id)) {
-                  collected.add(lObj.id);
-                  if (LL.audio) LL.audio.play('collect');
-                }
-              }
-              if (collected.size === 3) setTimeout(advanceStage, 260);
-              else paintMaze();
-            };
-          });
+      box.innerHTML = `
+        <div class="panel mg-card rpg-box">
+          ${headerHTML}
+          <p>${isMissing
+            ? `ჩასვი გამოტოვებული ასო სიტყვაში: <b class="big-word">_${t.word.slice(1)}</b> (${t.hint})`
+            : `იპოვე ასო: <b>„${t.name}“</b> — სიტყვაში <b>„${t.word}“</b>`}</p>
+          <div class="mg-choices">
+            ${opts.map(o => `<button type="button" class="btn big" data-oid="${o.id}">${o.char}</button>`).join('')}
+          </div>
+          <p class="note" id="mgHintBox">${cfg.autoHint ? `💡 ${t.pronunciation}` : ''}</p>
+          <p class="err" id="mgFeedback"></p>
+        </div>
+      `;
+      box.querySelector('#mgHintBtn').onclick = () => {
+        box.querySelector('#mgHintBox').textContent = `💡 „${t.char}“ (${t.name}) — ${t.word} (${t.syllables})`;
+      };
+      box.querySelectorAll('[data-oid]').forEach(btn => {
+        btn.onclick = () => {
+          const chosen = opts.find(x => x.id === Number(btn.dataset.oid));
+          if (chosen.id === t.id) {
+            if (LL.audio) LL.audio.play('correct');
+            advanceStage();
+          } else {
+            this.mistakes++;
+            if (LL.audio) LL.audio.play('wrong');
+            box.querySelector('#mgFeedback').textContent = `ეს არის „${chosen.char}“ (${chosen.name}). სცადე კიდევ ერთხელ!`;
+          }
         };
-        paintMaze();
-      }
+      });
     };
 
     renderStage();
@@ -1213,11 +1434,11 @@ LL.engine = {
     const box = document.getElementById('minigameOverlay');
     box.hidden = false;
     const isFinal = this.level.n === 11;
-    const bgStyle = restoredImg ? `background-image:linear-gradient(rgba(244,232,200,.88),rgba(232,214,166,.92)),url('${restoredImg.src}');background-size:cover;` : '';
 
     box.innerHTML = `
-      <div class="panel mg-card complete-card rpg-box" style="${bgStyle}">
+      <div class="panel mg-card complete-card rpg-box">
         <h2>${isFinal ? '🎉 შენ 33 ასო გადაარჩინე! ქართული ანბანი ისევ ცოცხალია!' : `დონე ${this.level.n} დასრულებულია!`}</h2>
+        ${isFinal && restoredImg ? `<img src="${restoredImg.src}" alt="აღდგენილი ბიბლიოთეკა" class="finale-art">` : ''}
         ${isFinal ? `<p class="finale-lesson">„ცოდნა მაშინ არის ნამდვილი სიმდიდრე, როდესაც მას სხვებსაც ვუზიარებთ.“</p>` : ''}
         <p class="stars-row">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</p>
         <p>ანბანის წიგნში დაემატა: <b>${this.levelLetters.map(l => `${l.char} (${l.name})`).join(' · ')}</b></p>

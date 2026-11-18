@@ -239,11 +239,15 @@ LL.openHeroCreator = () => {
     dlg.querySelector('#selDiff').onchange = e => { diff = LL.setDifficulty(e.target.value); };
     dlg.querySelector('#hcCloseBtn').onclick = () => dlg.close();
 
+    let submitting = false;
     dlg.querySelector('#heroAccountForm').onsubmit = async e => {
       e.preventDefault();
+      if (submitting) return;
+
       const fd = Object.fromEntries(new FormData(e.target));
       const nick = (fd.nickname || '').trim();
       const errEl = dlg.querySelector('#hcErr');
+      const submitBtn = dlg.querySelector('button[type="submit"]');
 
       if (nick.length < 2 || nick.length > 20) {
         errEl.textContent = 'მეტსახელი უნდა იყოს 2–20 სიმბოლო';
@@ -255,20 +259,25 @@ LL.openHeroCreator = () => {
       LL.setDifficulty(diff);
 
       if (fd.email && fd.email.trim()) {
-        if (!fd.password || fd.password.length < 6) {
-          errEl.textContent = 'პაროლი მინიმუმ 6 სიმბოლო უნდა იყოს';
+        submitting = true;
+        if (submitBtn) submitBtn.disabled = true;
+        errEl.textContent = 'ანგარიში იქმნება...';
+
+        const res = await LL.auth.register({
+          email: fd.email.trim(),
+          password: fd.password,
+          nickname: nick,
+          appearance: ap
+        });
+
+        submitting = false;
+        if (submitBtn) submitBtn.disabled = false;
+
+        if (!res.ok) {
+          errEl.innerHTML = `${res.error}<br><button type="button" class="btn alt sm" id="playLocalAnyway" style="margin-top:6px">გაგრძელება ლოკალურად (ანგარიშის გარეშე) ▶</button>`;
+          const localBtn = errEl.querySelector('#playLocalAnyway');
+          if (localBtn) localBtn.onclick = () => { location.href = 'game.html'; };
           return;
-        }
-        if (LL.sb) {
-          const { error } = await LL.sb.auth.signUp({
-            email: fd.email.trim(),
-            password: fd.password,
-            options: { data: { nickname: nick, appearance: ap } }
-          });
-          if (error) {
-            errEl.textContent = 'რეგისტრაციის შეცდომა: ' + error.message;
-            return;
-          }
         }
       }
 

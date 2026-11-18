@@ -144,17 +144,18 @@ LL.audio = {
   },
 
   playLetter(letterObj, onFallbackNotice) {
-    if (!letterObj || !letterObj.audio) {
+    if (!letterObj || !letterObj.id) {
       this.play('collect');
       if (onFallbackNotice) onFallbackNotice();
       return;
     }
+    const src = `assets/audio/letters/${letterObj.id}.wav`;
     try {
       if (this.activeVoice) {
         this.activeVoice.pause();
         this.activeVoice = null;
       }
-      const audio = new Audio(letterObj.audio);
+      const audio = new Audio(src);
       audio.volume = this.settings.muted ? 0 : this.settings.volume;
       this.activeVoice = audio;
       audio.play().catch(() => {

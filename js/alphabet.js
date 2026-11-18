@@ -1,0 +1,47 @@
+{
+  "letters": [
+    { "id": 1, "char": "ა", "name": "ანი", "pronunciation": "[a] — როგორც სიტყვაში „ამაყი“", "world": 1, "word": "ატამი", "syllables": "ა-ტა-მი", "hint": "ტკბილი ზაფხულის ხილი", "audio": "assets/audio/letters/1.wav" },
+    { "id": 2, "char": "ბ", "name": "ბანი", "pronunciation": "[b] — როგორც სიტყვაში „ბაღი“", "world": 1, "word": "ბურთი", "syllables": "ბურ-თი", "hint": "მრგვალი სათამაშო", "audio": "assets/audio/letters/2.wav" },
+    { "id": 3, "char": "გ", "name": "განი", "pronunciation": "[g] — როგორც სიტყვაში „გული“", "world": 1, "word": "გემი", "syllables": "გე-მი", "hint": "ზღვაში მოცურავე ხომალდი", "audio": "assets/audio/letters/3.wav" },
+
+    { "id": 4, "char": "დ", "name": "დონი", "pronunciation": "[d] — როგორც სიტყვაში „დედა“", "world": 2, "word": "დედა", "syllables": "დე-და", "hint": "ყველაზე ძვირფასი ადამიანი", "audio": "assets/audio/letters/4.wav" },
+    { "id": 5, "char": "ე", "name": "ენი", "pronunciation": "[ɛ] — როგორც სიტყვაში „ენა“", "world": 2, "word": "ენა", "syllables": "ე-ნა", "hint": "დედა ენა — ქართული სიტყვა", "audio": "assets/audio/letters/5.wav" },
+    { "id": 6, "char": "ვ", "name": "ვინი", "pronunciation": "[v] — როგორც სიტყვაში „ვაზი“", "world": 2, "word": "ვაშლი", "syllables": "ვაშ-ლი", "hint": "წითელი ან მწვანე ხილი", "audio": "assets/audio/letters/6.wav" },
+
+    { "id": 7, "char": "ზ", "name": "ზენი", "pronunciation": "[z] — როგორც სიტყვაში „ზღვა“", "world": 3, "word": "ზღვა", "syllables": "ზღვა", "hint": "დიდი ლურჯი წყალი", "audio": "assets/audio/letters/7.wav" },
+    { "id": 8, "char": "თ", "name": "თანი", "pronunciation": "[tʰ] — როგორც სიტყვაში „თოვლი“", "world": 3, "word": "თოვლი", "syllables": "თოვ-ლი", "hint": "ზამთარში ციდან ცვივა", "audio": "assets/audio/letters/8.wav" },
+    { "id": 9, "char": "ი", "name": "ინი", "pronunciation": "[i] — როგორც სიტყვაში „ია“", "world": 3, "word": "ია", "syllables": "ი-ა", "hint": "გაზაფხულის პატარა ლურჯი ყვავილი", "audio": "assets/audio/letters/9.wav" },
+
+    { "id": 10, "char": "კ", "name": "კანი", "pronunciation": "[kʼ] — მკვეთრი ბგერა, როგორც „კარი“", "world": 4, "word": "კარი", "syllables": "კა-რი", "hint": "სახლში შესასვლელი", "audio": "assets/audio/letters/10.wav" },
+    { "id": 11, "char": "ლ", "name": "ლასი", "pronunciation": "[l] — როგორც სიტყვაში „ლომი“", "world": 4, "word": "ლომი", "syllables": "ლო-მი", "hint": "ცხოველთა მეფე", "audio": "assets/audio/letters/11.wav" },
+    { "id": 12, "char": "მ", "name": "მანი", "pronunciation": "[m] — როგორც სიტყვაში „მზე“", "world": 4, "word": "მზე", "syllables": "მზე", "hint": "ცაზე ანათებს და გვათბობს", "audio": "assets/audio/letters/12.wav" },
+
+    { "id": 13, "char": "ნ", "name": "ნარი", "pronunciation": "[n] — როგორც სიტყვაში „ნავი“", "world": 5, "word": "ნავი", "syllables": "ნა-ვი", "hint": "წყალზე სასრიალო პატარა ხომალდი", "audio": "assets/audio/letters/13.wav" },
+    { "id": 14, "char": "ო", "name": "ონი", "pronunciation": "[ɔ] — როგორც სიტყვაში „ოქრო“", "world": 5, "word": "ოქრო", "syllables": "ოქ-რო", "hint": "მბზინავი ძვირფასი ლითონი", "audio": "assets/audio/letters/14.wav" },
+    { "id": 15, "char": "პ", "name": "პარი", "pronunciation": "[pʼ] — მკვეთრი ბგერა, როგორც „პური“", "world": 5, "word": "პური", "syllables": "პუ-რი", "hint": "ხორბლისგან გამომცხვარი", "audio": "assets/audio/letters/15.wav" },
+
+    { "id": 16, "char": "ჟ", "name": "ჟანი", "pronunciation": "[ʒ] — როგორც სიტყვაში „ჟირაფი“", "world": 6, "word": "ჟირაფი", "syllables": "ჟი-რა-ფი", "hint": "გრძელკისერა ცხოველი", "audio": "assets/audio/letters/16.wav" },
+    { "id": 17, "char": "რ", "name": "რაე", "pronunciation": "[r] — როგორც სიტყვაში „რუკა“", "world": 6, "word": "რუკა", "syllables": "რუ-კა", "hint": "გზის მაჩვენებელი ნახატი", "audio": "assets/audio/letters/17.wav" },
+    { "id": 18, "char": "ს", "name": "სანი", "pronunciation": "[s] — როგორც სიტყვაში „სახლი“", "world": 6, "word": "სახლი", "syllables": "სახ-ლი", "hint": "ჩვენი საცხოვრებელი ადგილი", "audio": "assets/audio/letters/18.wav" },
+
+    { "id": 19, "char": "ტ", "name": "ტარი", "pronunciation": "[tʼ] — მკვეთრი ბგერა, როგორც „ტყე“", "world": 7, "word": "ტყე", "syllables": "ტყე", "hint": "ხეებით სავსე ბუნება", "audio": "assets/audio/letters/19.wav" },
+    { "id": 20, "char": "უ", "name": "უნი", "pronunciation": "[u] — როგორც სიტყვაში „ურემი“", "world": 7, "word": "ურემი", "syllables": "უ-რე-მი", "hint": "ხის ბორბლებიანი საზიდარი", "audio": "assets/audio/letters/20.wav" },
+    { "id": 21, "char": "ფ", "name": "ფარი", "pronunciation": "[pʰ] — როგორც სიტყვაში „ფერი“", "world": 7, "word": "ფარი", "syllables": "ფა-რი", "hint": "მეომრის დამცავი იარაღი", "audio": "assets/audio/letters/21.wav" },
+
+    { "id": 22, "char": "ქ", "name": "ქანი", "pronunciation": "[kʰ] — როგორც სიტყვაში „ქარი“", "world": 8, "word": "ქარი", "syllables": "ქა-რი", "hint": "ჰაერის მოძრაობა", "audio": "assets/audio/letters/22.wav" },
+    { "id": 23, "char": "ღ", "name": "ღანი", "pronunciation": "[ɣ] — როგორც სიტყვაში „ღრუბელი“", "world": 8, "word": "ღრუბელი", "syllables": "ღრუ-ბე-ლი", "hint": "ცაში მოცურავე თეთრი ფთილა", "audio": "assets/audio/letters/23.wav" },
+    { "id": 24, "char": "ყ", "name": "ყარი", "pronunciation": "[qʼ] — ყელისმიერი მკვეთრი ბგერა, როგორც „ყვავილი“", "world": 8, "word": "ყვავილი", "syllables": "ყვა-ვი-ლი", "hint": "ლამაზი სურნელოვანი მცენარე", "audio": "assets/audio/letters/24.wav" },
+
+    { "id": 25, "char": "შ", "name": "შინი", "pronunciation": "[ʃ] — როგორც სიტყვაში „შუქი“", "world": 9, "word": "შუქი", "syllables": "შუ-ქი", "hint": "სიბნელის გამფანტველი სინათლე", "audio": "assets/audio/letters/25.wav" },
+    { "id": 26, "char": "ჩ", "name": "ჩინი", "pronunciation": "[tʃʰ] — როგორც სიტყვაში „ჩიტი“", "world": 9, "word": "ჩიტი", "syllables": "ჩი-ტი", "hint": "პატარა მფრინავი ფრინველი", "audio": "assets/audio/letters/26.wav" },
+    { "id": 27, "char": "ც", "name": "ცანი", "pronunciation": "[tsʰ] — როგორც სიტყვაში „ცა“", "world": 9, "word": "ცა", "syllables": "ცა", "hint": "ჩვენს ზემოთ გადაჭიმული ლურჯი სივრცე", "audio": "assets/audio/letters/27.wav" },
+
+    { "id": 28, "char": "ძ", "name": "ძილი", "pronunciation": "[dz] — როგორც სიტყვაში „ძაღლი“", "world": 10, "word": "ძაღლი", "syllables": "ძაღ-ლი", "hint": "ადამიანის ერთგული მეგობარი", "audio": "assets/audio/letters/28.wav" },
+    { "id": 29, "char": "წ", "name": "წილი", "pronunciation": "[tsʼ] — მკვეთრი ბგერა, როგორც „წიგნი“", "world": 10, "word": "წიგნი", "syllables": "წიგ-ნი", "hint": "ცოდნის საგანძური", "audio": "assets/audio/letters/29.wav" },
+    { "id": 30, "char": "ჭ", "name": "ჭარი", "pronunciation": "[tʃʼ] — მკვეთრი ბგერა, როგორც „ჭა“", "world": 10, "word": "ჭა", "syllables": "ჭა", "hint": "მიწიდან ამომავალი ცივი წყალი", "audio": "assets/audio/letters/30.wav" },
+
+    { "id": 31, "char": "ხ", "name": "ხანი", "pronunciation": "[x] — როგორც სიტყვაში „ხე“", "world": 11, "word": "ხე", "syllables": "ხე", "hint": "ფესვებიანი და ტოტებიანი მცენარე", "audio": "assets/audio/letters/31.wav" },
+    { "id": 32, "char": "ჯ", "name": "ჯანი", "pronunciation": "[dʒ] — როგორც სიტყვაში „ჯარი“", "world": 11, "word": "ჯვარი", "syllables": "ჯვა-რი", "hint": "უძველესი ქართული ძეგლი", "audio": "assets/audio/letters/32.wav" },
+    { "id": 33, "char": "ჰ", "name": "ჰაე", "pronunciation": "[h] — როგორც სიტყვაში „ჰაერი“", "world": 11, "word": "ჰაერი", "syllables": "ჰა-ე-რი", "hint": "რითაც ვსუნთქავთ", "audio": "assets/audio/letters/33.wav" }
+  ]
+}
