@@ -1,5 +1,5 @@
 {
-  "letters": [
+  "letters" [
     { "id": 1, "char": "ა", "name": "ანი", "pronunciation": "[a] — როგორც სიტყვაში „ამაყი“", "world": 1, "word": "ატამი", "syllables": "ა-ტა-მი", "hint": "ტკბილი ზაფხულის ხილი", "audio": "assets/audio/letters/1.wav" },
     { "id": 2, "char": "ბ", "name": "ბანი", "pronunciation": "[b] — როგორც სიტყვაში „ბაღი“", "world": 1, "word": "ბურთი", "syllables": "ბურ-თი", "hint": "მრგვალი სათამაშო", "audio": "assets/audio/letters/2.wav" },
     { "id": 3, "char": "გ", "name": "განი", "pronunciation": "[g] — როგორც სიტყვაში „გული“", "world": 1, "word": "გემი", "syllables": "გე-მი", "hint": "ზღვაში მოცურავე ხომალდი", "audio": "assets/audio/letters/3.wav" },

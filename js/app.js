@@ -1,4 +1,11 @@
 /* App bootstrap, Video + Illustrated Library Intro Cutscenes, Character Creator & Settings. */
+LL.credits = {
+  name: 'ნინო კუპრეიშვილი',
+  grade: 'VI კლასი',
+  school: 'სსიპ ქალაქ აბაშის ნოღოხაშის საჯარო სკოლა',
+  note: '„დედა ენის“ 150 წლის იუბილესადმი მიძღვნილი საგანმანათლებლო თამაში'
+};
+
 LL._alphabetCache = null;
 LL.loadAlphabet = async () => {
   if (LL._alphabetCache) return LL._alphabetCache;
@@ -343,6 +350,7 @@ LL.initHome = async () => {
   if (LL.audio) LL.audio.playMusic('main');
   LL.initAuthUI();
   LL.initSettingsUI();
+  LL.renderCreatorBadge();
 
   document.getElementById('startBtn').onclick = () => {
     if (LL.audio) LL.audio.play('click');
@@ -365,6 +373,28 @@ LL.initHome = async () => {
   document.getElementById('contBtn').hidden = !(await LL.progress.hasSave());
 };
 
+LL.renderCreatorBadge = async () => {
+  const main = document.querySelector('main');
+  if (!main) return;
+
+  const img = await LL.assets.load(LL.assets.manifest.creator);
+  const avatarHTML = img
+    ? `<img src="${img.src}" alt="${LL.credits.name}" class="creator-avatar">`
+    : '';
+
+  const bar = document.createElement('footer');
+  bar.className = 'creator-banner';
+  bar.innerHTML = `
+    ${avatarHTML}
+    <div class="creator-info">
+      <span class="creator-label">პროექტის ავტორი</span>
+      <b>${LL.credits.name} · ${LL.credits.grade}</b>
+      <span>${LL.credits.school}</span>
+    </div>
+  `;
+  main.appendChild(bar);
+};
+
 LL.initProfile = async () => {
   if (LL.audio) LL.audio.playMusic('map');
   const [u, state, letters] = await Promise.all([
@@ -376,27 +406,50 @@ LL.initProfile = async () => {
   const unlockedSet = new Set(state.letters || []);
   const nick = (u && u.user_metadata?.nickname) || localStorage.getItem('ll_nickname') || 'მოგზაური';
   const diffNames = { easy: 'მარტივი', normal: 'საშუალო', challenge: 'რთული' };
+  const totalStars = Object.values(state.level_stars || {}).reduce((a, b) => a + Number(b || 0), 0);
+  const futureLetter = (localStorage.getItem('ll_future_letter') || '').trim();
+
   panel.innerHTML = `
-    <canvas data-sprite="player" data-px="3" aria-label="ავატარი"></canvas>
-    <h2 id="nick">${nick}</h2>
-    <p class="note">${LL.sprites.appearanceSummary()} · სირთულე: <b>${diffNames[LL.getDifficulty()]}</b></p>
-    <p>გავლილი კუთხეები: <b>${state.levels_completed} / 11</b></p>
-    <p>შეგროვებული ასოები: <b>${unlockedSet.size} / ${letters.length}</b></p>
-    <div class="profile-letters">
-      ${letters.map(l => `<span class="hud-pill ${unlockedSet.has(l.id) ? 'got' : ''}">${unlockedSet.has(l.id) ? l.char : '?'}</span>`).join('')}
+    <div class="profile-header">
+      <canvas data-sprite="player" data-anim="celebrate" data-px="3" aria-label="ავატარი"></canvas>
+      <h2 id="nick" style="margin:6px 0 2px">${nick}</h2>
+      <p class="note" style="margin:0 0 10px">${LL.sprites.appearanceSummary()} · სირთულე: <b>${diffNames[LL.getDifficulty()]}</b></p>
     </div>
+
+    <div class="profile-stats">
+      <div class="stat-box"><b>${state.levels_completed} / 11</b><span>კუთხე</span></div>
+      <div class="stat-box"><b>${unlockedSet.size} / ${letters.length}</b><span>ასო</span></div>
+      <div class="stat-box"><b>⭐ ${totalStars} / 33</b><span>ვარსკვლავი</span></div>
+      <div class="stat-box"><b>🏆 ${(state.achievements || []).length} / ${LL.achievements.catalog.length}</b><span>მიღწევა</span></div>
+    </div>
+
+    <div class="profile-letters">
+      ${letters.map(l => `<span class="p-letter ${unlockedSet.has(l.id) ? 'got' : ''}" title="${l.char} — ${l.name}">${unlockedSet.has(l.id) ? l.char : '?'}</span>`).join('')}
+    </div>
+
+    ${futureLetter ? `
+      <div class="profile-quote">
+        <b>✍️ შენი გზავნილი მომავალ თაობას:</b>
+        <p>„${futureLetter.replace(/</g, '&lt;')}“</p>
+      </div>
+    ` : ''}
+
     <div class="actions">
-      <button type="button" class="btn alt" id="changeCharBtn">🎨 გმირის გარეგნობის შეცვლა</button>
-      <button type="button" class="btn" id="profBookBtn">📖 ანბანის წიგნის გახსნა</button>
-      ${u ? '<button type="button" class="btn alt" id="logoutBtn">გამოსვლა</button>' : ''}
+      <div class="btn-row">
+        <button type="button" class="btn alt" id="changeCharBtn">🎨 გარეგნობის შეცვლა</button>
+        <button type="button" class="btn" id="profBookBtn">📖 ანბანის წიგნი</button>
+      </div>
+      ${u ? '<button type="button" class="btn alt sm" id="logoutBtn">გამოსვლა</button>' : ''}
     </div>
   `;
+
   LL.sprites.mount();
   panel.querySelector('#changeCharBtn').onclick = () => LL.openHeroCreator();
   panel.querySelector('#profBookBtn').onclick = () => LL.alphabetBook.open();
   const lo = panel.querySelector('#logoutBtn');
   if (lo) lo.onclick = async () => { await LL.auth.logout(); location.href = 'index.html'; };
 };
+
 
 LL.init = page => {
   LL.renderNav(page);

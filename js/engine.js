@@ -1,8 +1,8 @@
 /* Complete 2D HTML5 Canvas Game Engine + 11 Distinct Region Minigames
- * Slices real pixel-art props & tiles from assets/minigames/{maze_tile,memory_card,puzzle_board,hidden_objects}.png
- * Enforces:
- * - Each level teaches & reinforces ONLY its 3 target letters (and previously learned letters id <= level * 3)
- * - 3 difficulty modes (Easy, Normal, Challenge), child-friendly hints, no punishing game-overs
+ * - Full-screen responsive logical resolution (height 540, dynamic width matching screen aspect ratio)
+ * - Walk & jump platform exploration on ALL 11 levels before launching the level's multi-stage challenge
+ * - Automatic dark-backdrop keying & bounding-box auto-trimming for all sliced minigame props
+ * - Non-repeating multi-stage curriculum per level using ONLY learned letters (id <= level * 3)
  */
 LL.engine = {
   W: 960,
@@ -21,7 +21,7 @@ LL.engine = {
   allLetters: [],
   layers: null,
   sheets: null,
-  props: {}, // Cropped pixel-art prop dataURLs from the 4 minigame atlases
+  props: {},
 
   mode: 'dialogue',
   dialogueQueue: [],
@@ -37,7 +37,7 @@ LL.engine = {
   vy: 0,
   onGround: true,
   cameraX: 0,
-  worldWidth: 1360,
+  worldWidth: 1440,
   keys: { left: false, right: false, jump: false },
 
   pickups: [],
@@ -53,19 +53,92 @@ LL.engine = {
   flyingLetters: [],
   skyFinaleLetters: [],
 
-  /* Crops a normalized [x, y, w, h] sub-rectangle from a sprite atlas into a crisp dataURL */
-  cropProp(img, rx, ry, rw, rh, outW = 96, outH = 96) {
+  /* Slices a prop from a dark-backed sprite atlas, removes the dark background via edge flood-fill,
+   * and auto-trims transparent margins so every item is cleanly cut out.
+   */
+  cropProp(img, rx, ry, rw, rh, padOut = 2) {
     if (!img) return '';
     const sw = Math.max(1, Math.round(img.width * rw));
     const sh = Math.max(1, Math.round(img.height * rh));
     const sx = Math.round(img.width * rx);
     const sy = Math.round(img.height * ry);
+
     const cv = document.createElement('canvas');
-    cv.width = outW;
-    cv.height = outH;
-    const c = cv.getContext('2d');
+    cv.width = sw;
+    cv.height = sh;
+    const c = cv.getContext('2d', { willReadFrequently: true });
     c.imageSmoothingEnabled = false;
-    c.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+    c.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    try {
+      const imgData = c.getImageData(0, 0, sw, sh);
+      const d = imgData.data;
+
+      // Sample corner color (the dark slate-grey background in the atlases)
+      const bgR = d[0], bgG = d[1], bgB = d[2];
+      const isBg = idx => {
+        if (d[idx + 3] < 20) return true;
+        const dr = Math.abs(d[idx] - bgR);
+        const dg = Math.abs(d[idx + 1] - bgG);
+        const db = Math.abs(d[idx + 2] - bgB);
+        return dr < 26 && dg < 26 && db < 26;
+      };
+
+      // Edge flood-fill to remove dark backdrop without erasing dark interior outlines
+      const visited = new Uint8Array(sw * sh);
+      const queue = new Int32Array(sw * sh);
+      let head = 0, tail = 0;
+
+      const push = (x, y) => {
+        if (x < 0 || x >= sw || y < 0 || y >= sh) return;
+        const p = y * sw + x;
+        if (visited[p]) return;
+        visited[p] = 1;
+        if (isBg(p * 4)) queue[tail++] = p;
+      };
+
+      for (let x = 0; x < sw; x++) { push(x, 0); push(x, sh - 1); }
+      for (let y = 0; y < sh; y++) { push(0, y); push(sw - 1, y); }
+
+      while (head < tail) {
+        const p = queue[head++];
+        d[p * 4 + 3] = 0;
+        const px = p % sw;
+        const py = (p / sw) | 0;
+        push(px + 1, py);
+        push(px - 1, py);
+        push(px, py + 1);
+        push(px, py - 1);
+      }
+
+      c.putImageData(imgData, 0, 0);
+
+      // Find tight bounding box of remaining opaque pixels
+      let minX = sw, minY = sh, maxX = -1, maxY = -1;
+      for (let y = 0; y < sh; y++) {
+        for (let x = 0; x < sw; x++) {
+          if (d[(y * sw + x) * 4 + 3] > 25) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (maxX >= minX && maxY >= minY) {
+        const tw = maxX - minX + 1 + padOut * 2;
+        const th = maxY - minY + 1 + padOut * 2;
+        const out = document.createElement('canvas');
+        out.width = tw;
+        out.height = th;
+        const oc = out.getContext('2d');
+        oc.imageSmoothingEnabled = false;
+        oc.drawImage(cv, minX, minY, maxX - minX + 1, maxY - minY + 1, padOut, padOut, maxX - minX + 1, maxY - minY + 1);
+        return out.toDataURL('image/png');
+      }
+    } catch (_) {}
+
     return cv.toDataURL('image/png');
   },
 
@@ -81,38 +154,51 @@ LL.engine = {
 
     this.props = {
       _ready: true,
-      // From maze_tile.png
-      stoneWall: this.cropProp(mazeImg, 0.015, 0.02, 0.105, 0.18, 64, 64),
-      grassTile: this.cropProp(mazeImg, 0.34, 0.02, 0.105, 0.18, 64, 64),
-      woodDoor: this.cropProp(mazeImg, 0.02, 0.21, 0.13, 0.19, 80, 96),
-      ironGate: this.cropProp(mazeImg, 0.17, 0.21, 0.15, 0.19, 80, 96),
-      goldKey: this.cropProp(mazeImg, 0.55, 0.42, 0.17, 0.12, 96, 56),
-      chestClosed: this.cropProp(mazeImg, 0.74, 0.41, 0.11, 0.15, 84, 76),
-      chestOpen: this.cropProp(mazeImg, 0.86, 0.41, 0.12, 0.15, 84, 76),
-      sunTile: this.cropProp(mazeImg, 0.16, 0.60, 0.11, 0.17, 72, 72),
-      gemTile: this.cropProp(mazeImg, 0.28, 0.60, 0.11, 0.17, 72, 72),
-      scroll: this.cropProp(mazeImg, 0.35, 0.80, 0.09, 0.18, 64, 80),
-      lantern: this.cropProp(mazeImg, 0.90, 0.80, 0.08, 0.18, 64, 80),
+      // From maze_tile.png (cleanly isolated tiles, keys, chests, plates, scroll, lantern)
+      stoneWall: this.cropProp(mazeImg, 0.02, 0.02, 0.10, 0.175),
+      grassTile: this.cropProp(mazeImg, 0.345, 0.02, 0.10, 0.175),
+      goldKey: this.cropProp(mazeImg, 0.555, 0.425, 0.165, 0.115),
+      chestClosed: this.cropProp(mazeImg, 0.745, 0.415, 0.105, 0.145),
+      chestOpen: this.cropProp(mazeImg, 0.865, 0.415, 0.115, 0.145),
+      sunTile: this.cropProp(mazeImg, 0.165, 0.605, 0.105, 0.165),
+      gemTile: this.cropProp(mazeImg, 0.285, 0.605, 0.105, 0.165),
+      scroll: this.cropProp(mazeImg, 0.355, 0.805, 0.085, 0.175),
+      lantern: this.cropProp(mazeImg, 0.905, 0.805, 0.075, 0.175),
 
-      // From memory_card.png
-      cardBack: this.cropProp(memImg, 0.025, 0.03, 0.105, 0.29, 96, 132),
-      cardFront: this.cropProp(memImg, 0.145, 0.03, 0.105, 0.29, 96, 132),
-      woodRune: this.cropProp(memImg, 0.50, 0.03, 0.095, 0.17, 72, 72),
+      // From memory_card.png (ornate carved card back/front & wooden rune square)
+      cardBack: this.cropProp(memImg, 0.028, 0.035, 0.10, 0.285),
+      cardFront: this.cropProp(memImg, 0.148, 0.035, 0.10, 0.285),
+      woodRune: this.cropProp(memImg, 0.502, 0.035, 0.092, 0.165),
 
-      // From puzzle_board.png
-      slotTile: this.cropProp(puzImg, 0.02, 0.03, 0.095, 0.18, 72, 72),
-      lockClosed: this.cropProp(puzImg, 0.34, 0.56, 0.075, 0.19, 64, 80),
-      lockOpen: this.cropProp(puzImg, 0.43, 0.56, 0.08, 0.19, 64, 80),
-      runeBlue: this.cropProp(puzImg, 0.91, 0.57, 0.07, 0.18, 64, 80),
+      // From puzzle_board.png (wooden slot tile & closed/open padlocks)
+      slotTile: this.cropProp(puzImg, 0.024, 0.035, 0.09, 0.175),
+      lockClosed: this.cropProp(puzImg, 0.345, 0.565, 0.07, 0.185),
+      lockOpen: this.cropProp(puzImg, 0.435, 0.565, 0.075, 0.185),
 
-      // From hidden_objects.png
-      qvevri: this.cropProp(hidImg, 0.02, 0.65, 0.11, 0.32, 72, 96),
-      horn: this.cropProp(hidImg, 0.15, 0.65, 0.11, 0.32, 72, 96),
-      book: this.cropProp(hidImg, 0.47, 0.66, 0.10, 0.30, 72, 96),
-      coin: this.cropProp(hidImg, 0.69, 0.68, 0.09, 0.28, 72, 72),
-      compass: this.cropProp(hidImg, 0.88, 0.66, 0.10, 0.30, 72, 88)
+      // From hidden_objects.png (qvevri, drinking horn, magic book, gold coin, compass)
+      qvevri: this.cropProp(hidImg, 0.025, 0.655, 0.105, 0.315),
+      horn: this.cropProp(hidImg, 0.155, 0.655, 0.105, 0.315),
+      book: this.cropProp(hidImg, 0.475, 0.665, 0.095, 0.295),
+      coin: this.cropProp(hidImg, 0.695, 0.685, 0.085, 0.275),
+      compass: this.cropProp(hidImg, 0.885, 0.665, 0.095, 0.295)
     };
     return this.props;
+  },
+
+  syncViewportSize() {
+    if (!this.canvas) return;
+    const frame = this.canvas.parentElement;
+    if (!frame) return;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const targetW = Math.max(640, Math.min(1600, Math.round(this.H * (rect.width / rect.height))));
+      if (this.canvas.width !== targetW || this.canvas.height !== this.H) {
+        this.W = targetW;
+        this.canvas.width = this.W;
+        this.canvas.height = this.H;
+        this.ctx.imageSmoothingEnabled = false;
+      }
+    }
   },
 
   getDiffConfig() {
@@ -122,9 +208,9 @@ LL.engine = {
       return { id: 'easy', label: 'მარტივი', rounds: 6, decoys: 2, useTimer: false, timeSec: 0, autoHint: true };
     }
     if (diff === 'challenge') {
-      return { id: 'challenge', label: 'რთული', rounds: 8 + Math.min(2, lvlScale), decoys: 5, useTimer: true, timeSec: Math.max(45, 70 - lvlScale * 6), autoHint: false };
+      return { id: 'challenge', label: 'რთული', rounds: 8, decoys: 5, useTimer: true, timeSec: Math.max(45, 70 - lvlScale * 6), autoHint: false };
     }
-    return { id: 'normal', label: 'საშუალო', rounds: 7 + Math.min(1, lvlScale), decoys: 3, useTimer: this.level.n >= 6, timeSec: Math.max(60, 88 - lvlScale * 5), autoHint: false };
+    return { id: 'normal', label: 'საშუალო', rounds: 7, decoys: 3, useTimer: this.level.n >= 6, timeSec: Math.max(60, 88 - lvlScale * 5), autoHint: false };
   },
 
   async startLevel(levelNum) {
@@ -211,6 +297,7 @@ LL.engine = {
 
     this.canvas = document.getElementById('playCanvas');
     this.ctx = this.canvas.getContext('2d');
+    this.syncViewportSize();
     this.ctx.imageSmoothingEnabled = false;
 
     this.bindUI();
@@ -229,9 +316,10 @@ LL.engine = {
     this.monster = LL.sprites.createActor('monster', 'idle', 7);
 
     this.setupWorldForLevel();
+
+    // ALL 11 levels enter playable exploration mode after intro dialogue!
     this.startDialogue(lvl.intro, () => {
-      if (this.level.n === 1) this.mode = 'play';
-      else this.launchLevelMinigame();
+      this.mode = 'play';
     });
 
     this.lastTime = performance.now();
@@ -239,6 +327,7 @@ LL.engine = {
       const dt = Math.min(0.05, (now - this.lastTime) / 1000);
       this.lastTime = now;
       this.lastDt = dt;
+      this.syncViewportSize();
       if (!this.paused && !this.overlayPaused) this.update(dt);
       this.render();
       this.raf = requestAnimationFrame(tick);
@@ -291,15 +380,17 @@ LL.engine = {
     };
 
     this._onKeyDown = e => {
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.keys.left = true;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') this.keys.right = true;
       if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') {
         if (this.mode === 'dialogue') { e.preventDefault(); this.advanceDialogue(); }
-        else this.keys.jump = true;
+        else if (this.mode === 'play') this.keys.jump = true;
       }
       if (e.code === 'Escape') this.togglePause();
     };
     this._onKeyUp = e => {
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.keys.left = false;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') this.keys.right = false;
       if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') this.keys.jump = false;
@@ -367,54 +458,54 @@ LL.engine = {
     this.vx = 0;
     this.vy = 0;
     this.cameraX = 0;
-    this.worldWidth = 1360;
+    this.worldWidth = 1440;
     this.animClock = 0;
 
     const platsByLevel = {
-      1: [[340, 395, 130], [540, 345, 130], [730, 395, 130]],
-      2: [[330, 385, 140], [520, 325, 140], [720, 375, 140]],
-      3: [[350, 405, 125], [530, 330, 135], [715, 285, 130]],
-      4: [[340, 380, 150], [550, 380, 150], [750, 335, 140]],
-      5: [[330, 370, 120], [510, 310, 120], [690, 365, 120]],
-      6: [[340, 400, 130], [535, 355, 130], [725, 310, 130]],
-      7: [[320, 390, 115], [495, 325, 115], [670, 270, 120]],
-      8: [[335, 380, 120], [515, 315, 120], [695, 260, 125]],
-      9: [[340, 395, 140], [540, 340, 140], [740, 395, 140]],
-      10: [[325, 375, 115], [500, 310, 115], [680, 260, 120]],
-      11: [[330, 385, 130], [520, 320, 130], [710, 265, 135]]
+      1: [[340, 395, 135], [550, 340, 135], [760, 395, 135]],
+      2: [[330, 385, 140], [540, 325, 140], [750, 375, 140]],
+      3: [[350, 405, 130], [550, 330, 140], [750, 285, 135]],
+      4: [[340, 380, 150], [560, 380, 150], [770, 335, 140]],
+      5: [[330, 370, 125], [530, 310, 125], [730, 365, 125]],
+      6: [[340, 400, 135], [550, 355, 135], [760, 310, 135]],
+      7: [[320, 390, 125], [520, 325, 125], [720, 270, 125]],
+      8: [[335, 380, 125], [535, 315, 125], [735, 260, 130]],
+      9: [[340, 395, 140], [550, 340, 140], [760, 395, 140]],
+      10: [[325, 375, 125], [525, 310, 125], [725, 260, 125]],
+      11: [[330, 385, 135], [540, 320, 135], [750, 265, 140]]
     };
 
     const plats = platsByLevel[this.level.n] || platsByLevel[1];
     this.platforms = plats.map(([x, y, w]) => ({ x, y, w, h: 16 }));
 
-    this.clouds = Array.from({ length: 5 }, (_, i) => ({
-      x: i * 230, y: 34 + (i % 3) * 26, speed: 10 + (i % 3) * 5, scale: 0.85 + (i % 2) * 0.35
+    this.clouds = Array.from({ length: 6 }, (_, i) => ({
+      x: i * 240, y: 34 + (i % 3) * 26, speed: 10 + (i % 3) * 5, scale: 0.85 + (i % 2) * 0.35
     }));
-    this.goldenParticles = Array.from({ length: 22 }, () => ({
-      x: Math.random() * this.W, y: Math.random() * (this.H - 85),
+    this.goldenParticles = Array.from({ length: 24 }, () => ({
+      x: Math.random() * 1400, y: Math.random() * (this.H - 85),
       vx: -10 + Math.random() * 20, vy: -14 - Math.random() * 18, phase: Math.random() * Math.PI * 2
     }));
     this.leaves = (this.level.n === 3 || this.level.n === 6)
       ? Array.from({ length: 18 }, () => ({
-          x: Math.random() * this.W, y: Math.random() * this.H,
+          x: Math.random() * 1400, y: Math.random() * this.H,
           vy: 28 + Math.random() * 26, sway: Math.random() * Math.PI * 2,
           color: Math.random() > 0.45 ? '#e07a22' : '#4a9e38'
         }))
       : [];
     this.snowflakes = this.level.n === 8
       ? Array.from({ length: 36 }, () => ({
-          x: Math.random() * this.W, y: Math.random() * this.H,
+          x: Math.random() * 1400, y: Math.random() * this.H,
           r: 2 + Math.random() * 2.5, vy: 32 + Math.random() * 34, drift: Math.random() * Math.PI * 2
         }))
       : [];
     this.fireflies = (this.level.n === 3 || this.level.n === 7 || this.level.n === 11)
       ? Array.from({ length: 18 }, () => ({
-          x: Math.random() * this.W, y: 180 + Math.random() * 270,
+          x: Math.random() * 1400, y: 180 + Math.random() * 270,
           vx: -18 + Math.random() * 36, vy: -12 + Math.random() * 24, phase: Math.random() * Math.PI * 2
         }))
       : [];
     this.floatingBooks = this.level.n === 4
-      ? Array.from({ length: 5 }, (_, i) => ({ x: 160 + i * 175, y: 120 + (i % 2) * 55, phase: i * 1.3 }))
+      ? Array.from({ length: 5 }, (_, i) => ({ x: 180 + i * 190, y: 120 + (i % 2) * 55, phase: i * 1.3 }))
       : [];
 
     this.pickups = this.levelLetters.map((l, idx) => {
@@ -445,13 +536,13 @@ LL.engine = {
     this.monster.update(dt);
 
     if (this.mode === 'play') {
-      const speed = 260;
+      const speed = 270;
       if (this.keys.left) { this.vx = -speed; this.player.flipX = true; }
       else if (this.keys.right) { this.vx = speed; this.player.flipX = false; }
       else this.vx = 0;
 
       if (this.keys.jump && this.onGround) {
-        this.vy = -520;
+        this.vy = -530;
         this.onGround = false;
         if (LL.audio) LL.audio.play('jump');
       }
@@ -476,7 +567,7 @@ LL.engine = {
       else if (Math.abs(this.vx) > 5) this.player.setAnim('walk');
       else if (this.player.anim !== 'celebrate') this.player.setAnim('idle');
 
-      const targetCam = Math.max(0, Math.min(this.worldWidth - this.W, this.px - this.W * 0.35));
+      const targetCam = Math.max(0, Math.min(Math.max(0, this.worldWidth - this.W), this.px - this.W * 0.35));
       this.cameraX += (targetCam - this.cameraX) * Math.min(1, dt * 8);
 
       for (const p of this.pickups) {
@@ -485,7 +576,7 @@ LL.engine = {
           this.collectWorldPickup(p);
         }
       }
-      if (this.px >= 820) this.launchLevelMinigame();
+      if (this.px >= 900) this.launchLevelMinigame();
     }
 
     if (this.mode === 'reward' || this.mode === 'finale') {
@@ -517,7 +608,7 @@ LL.engine = {
     ctx.restore();
 
     if (n === 7 || n === 8 || n === 10) {
-      const wx = Math.round(740 - this.cameraX * 0.45);
+      const wx = Math.round(760 - this.cameraX * 0.45);
       ctx.save();
       ctx.fillStyle = 'rgba(175, 232, 255, 0.32)';
       ctx.fillRect(wx, 185, 34, 280);
@@ -555,7 +646,7 @@ LL.engine = {
       ctx.fillStyle = 'rgba(36, 138, 196, 0.45)';
       ctx.fillRect(0, 472, this.W, 68);
       ctx.fillStyle = 'rgba(205, 244, 255, 0.6)';
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 18; i++) {
         const rx = ((i * 68 + this.animClock * 95) % (this.W + 40)) - 20;
         ctx.fillRect(Math.round(rx), 482 + (i % 4) * 14, 28, 3);
       }
@@ -673,7 +764,7 @@ LL.engine = {
       ctx.restore();
     }
 
-    const monsterScreenX = 850 - this.cameraX;
+    const monsterScreenX = 940 - this.cameraX;
     if (monsterScreenX > -140 && monsterScreenX < this.W + 140) {
       this.monster.flipX = true;
       this.monster.draw(ctx, this.sheets, monsterScreenX, 465, 2.4);
@@ -724,74 +815,126 @@ LL.engine = {
     return candidates.sort(() => Math.random() - 0.5).slice(0, count);
   },
 
-  /* Builds a distinct, region-specific multi-stage curriculum (6-10 stages) for each of the 11 regions */
+  /* Builds a non-repeating, region-specific multi-stage curriculum (6-8 unique stages) for each level */
   buildCurriculumForLevel(cfg) {
     const L = this.levelLetters;
     const n = this.level.n;
 
-    // Each region starts with its signature pixel-art minigame, followed by tailored reinforcement stages!
+    // Every stage in a level uses a DIFFERENT mechanic/letter combination (zero back-to-back repeats)
     const plans = {
-      1: [ // Kakheti: Qvevri Treasure Jars + Sound Recognition
+      1: [ // Kakheti (ა, ბ, გ)
         { kind: 'qvevri_jars' },
-        { kind: 'recognize', target: L[0] }, { kind: 'recognize', target: L[1] }, { kind: 'recognize', target: L[2] },
-        { kind: 'missing', target: L[0] }, { kind: 'build', target: L[1] }
-      ],
-      2: [ // Tbilisi: Carved Wooden Rune Board Word Builder
-        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] },
-        { kind: 'missing', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'recognize', target: L[2] }
-      ],
-      3: [ // Borjomi: Hidden Relics in the Forest (Lantern, Compass, Horn, Qvevri, Book)
-        { kind: 'hidden_relics' },
-        { kind: 'recognize', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'wood_board', target: L[2] },
-        { kind: 'recognize', target: L[1] }, { kind: 'missing', target: L[2] }
-      ],
-      4: [ // Mtskheta: Ornate Carved Wooden Card Memory Match
+        { kind: 'story_riddle', story: 'იაკობ გოგებაშვილმა „დედა ენა“ ნაცნობი სიტყვებით დაიწყო, რათა ბავშვებს ასოები ადვილად დაემახსოვრებინათ.', q: 'რომელი ასოთი იწყება სიტყვა „ატამი“?', target: L[0] },
+        { kind: 'missing', target: L[1] },
+        { kind: 'wood_board', target: L[2] },
         { kind: 'ornate_memory' },
-        { kind: 'recognize', target: L[0] }, { kind: 'recognize', target: L[1] }, { kind: 'wood_board', target: L[2] },
-        { kind: 'missing', target: L[0] }, { kind: 'wood_board', target: L[1] }
+        { kind: 'recognize', target: L[0] },
+        { kind: 'flash_memory' },
+        { kind: 'alphabet_cipher', target: L[1] }
       ],
-      5: [ // Vardzia: Locked Doors & Golden Keys Cipher
+      2: [ // Tbilisi (დ, ე, ვ)
+        { kind: 'sequence_order', title: 'როგორ იქმნება წიგნი?', steps: ['ასოების შეგროვება', 'წიგნის დაბეჭდვა', 'მკითხველამდე მიტანა', 'ცოდნის გაზიარება'] },
+        { kind: 'wood_board', target: L[0] },
+        { kind: 'missing', target: L[1] },
+        { kind: 'ornate_memory' },
+        { kind: 'recognize', target: L[2] },
+        { kind: 'alphabet_cipher', target: L[0] },
+        { kind: 'flash_memory' },
+        { kind: 'sliding_mosaic' }
+      ],
+      3: [ // Borjomi (ზ, თ, ი)
+        { kind: 'hidden_relics' },
+        { kind: 'sequence_order', title: 'იგავი: ლომი და თაგვი', steps: ['თაგვი ლომის ხმას გაიგონებს', 'ხეზე მიბმულ ლომს იპოვის', 'თოკებს გადაღრღნის', 'ლომი გათავისუფლდება'] },
+        { kind: 'missing', target: L[0] },
+        { kind: 'wood_board', target: L[1] },
+        { kind: 'recognize', target: L[2] },
+        { kind: 'flash_memory' },
+        { kind: 'ornate_memory' },
+        { kind: 'alphabet_cipher', target: L[1] }
+      ],
+      4: [ // Mtskheta (კ, ლ, მ)
+        { kind: 'year_lock', title: 'დროის საკეტი — „დედა ენა“', hint: 'იაკობ გოგებაშვილის „დედა ენა“ პირველად 1876 წელს გამოიცა.', code: '1876' },
+        { kind: 'ornate_memory' },
+        { kind: 'wood_board', target: L[0] },
+        { kind: 'missing', target: L[1] },
+        { kind: 'recognize', target: L[2] },
+        { kind: 'alphabet_cipher', target: L[1] },
+        { kind: 'sliding_mosaic' },
+        { kind: 'flash_memory' }
+      ],
+      5: [ // Vardzia (ნ, ო, პ)
         { kind: 'key_locks' },
-        { kind: 'missing', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'missing', target: L[2] },
-        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[2] }
+        { kind: 'alphabet_cipher', target: L[0] },
+        { kind: 'missing', target: L[1] },
+        { kind: 'wood_board', target: L[2] },
+        { kind: 'ornate_memory' },
+        { kind: 'recognize', target: L[0] },
+        { kind: 'sliding_mosaic' },
+        { kind: 'flash_memory' }
       ],
-      6: [ // Racha: Flowing River Scrolls & Lantern Catch
+      6: [ // Racha (ჟ, რ, ს)
         { kind: 'river_scrolls' },
-        { kind: 'recognize', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'wood_board', target: L[2] },
-        { kind: 'recognize', target: L[2] }, { kind: 'wood_board', target: L[0] }
+        { kind: 'flash_memory' },
+        { kind: 'wood_board', target: L[1] },
+        { kind: 'missing', target: L[2] },
+        { kind: 'alphabet_cipher', target: L[0] },
+        { kind: 'ornate_memory' },
+        { kind: 'recognize', target: L[1] },
+        { kind: 'sliding_mosaic' }
       ],
-      7: [ // Tusheti: Stone-Wall & Grass Dungeon Tile Maze
+      7: [ // Tusheti (ტ, უ, ფ)
         { kind: 'stone_maze' },
         { kind: 'key_locks' },
-        { kind: 'recognize', target: L[0] }, { kind: 'missing', target: L[1] }, { kind: 'wood_board', target: L[2] },
-        { kind: 'missing', target: L[2] }
-      ],
-      8: [ // Svaneti: Glowing Runestone & Sun/Gem Pressure Plates
-        { kind: 'runestone_plates', target: L[0] }, { kind: 'runestone_plates', target: L[1] }, { kind: 'runestone_plates', target: L[2] },
+        { kind: 'wood_board', target: L[0] },
+        { kind: 'flash_memory' },
+        { kind: 'missing', target: L[1] },
+        { kind: 'alphabet_cipher', target: L[2] },
         { kind: 'ornate_memory' },
-        { kind: 'wood_board', target: L[1] }, { kind: 'missing', target: L[2] }
+        { kind: 'recognize', target: L[2] }
       ],
-      9: [ // Adjara: 3-Lock Treasure Chest Forging
+      8: [ // Svaneti (ქ, ღ, ყ)
+        { kind: 'sliding_mosaic' },
+        { kind: 'runestone_plates', target: L[0] },
+        { kind: 'wood_board', target: L[1] },
+        { kind: 'ornate_memory' },
+        { kind: 'missing', target: L[2] },
+        { kind: 'alphabet_cipher', target: L[0] },
+        { kind: 'flash_memory' },
+        { kind: 'key_locks' }
+      ],
+      9: [ // Adjara (შ, ჩ, ც)
         { kind: 'treasure_chest' },
-        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] },
-        { kind: 'missing', target: L[0] }, { kind: 'recognize', target: L[2] }
+        { kind: 'alphabet_cipher', target: L[1] },
+        { kind: 'wood_board', target: L[2] },
+        { kind: 'ornate_memory' },
+        { kind: 'missing', target: L[0] },
+        { kind: 'sliding_mosaic' },
+        { kind: 'recognize', target: L[1] },
+        { kind: 'flash_memory' }
       ],
-      10: [ // Javakheti: Paravani Compass & Multi-Skill Gauntlet
-        { kind: 'hidden_relics' }, { kind: 'key_locks' }, { kind: 'ornate_memory' },
-        { kind: 'wood_board', target: L[0] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] }
+      10: [ // Javakheti (ძ, წ, ჭ)
+        { kind: 'year_lock', title: 'ისტორიული კარიბჭე', hint: 'ასპინძის ბრძოლა 1770 წელს გაიმართა.', code: '1770' },
+        { kind: 'sliding_mosaic' },
+        { kind: 'hidden_relics' },
+        { kind: 'alphabet_cipher', target: L[2] },
+        { kind: 'wood_board', target: L[0] },
+        { kind: 'ornate_memory' },
+        { kind: 'missing', target: L[1] },
+        { kind: 'key_locks' }
       ],
-      11: [ // Final Fortress: 3 Seals of Asotsqlapia's Saddlebag
-        { kind: 'treasure_chest' }, { kind: 'runestone_plates', target: L[0] }, { kind: 'runestone_plates', target: L[1] },
-        { kind: 'runestone_plates', target: L[2] }, { kind: 'wood_board', target: L[1] }, { kind: 'wood_board', target: L[2] }
+      11: [ // Final Fortress (ხ, ჯ, ჰ)
+        { kind: 'treasure_chest' },
+        { kind: 'alphabet_cipher', target: L[0] },
+        { kind: 'runestone_plates', target: L[1] },
+        { kind: 'wood_board', target: L[2] },
+        { kind: 'ornate_memory' },
+        { kind: 'sliding_mosaic' },
+        { kind: 'key_locks' },
+        { kind: 'flash_memory' }
       ]
     };
 
-    const list = [...(plans[n] || plans[1])];
-    while (list.length < cfg.rounds) {
-      const pick = L[list.length % 3];
-      list.push({ kind: list.length % 2 === 0 ? 'wood_board' : 'missing', target: pick });
-    }
-    return list.slice(0, cfg.rounds);
+    return (plans[n] || plans[1]).slice(0, cfg.rounds);
   },
 
   launchLevelMinigame() {
@@ -897,7 +1040,7 @@ LL.engine = {
         return;
       }
 
-      // 2. CARVED WOODEN RUNE BOARD (Tbilisi & Word Construction)
+      // 2. CARVED WOODEN RUNE BOARD (Word Construction)
       if (st.kind === 'wood_board' || st.kind === 'build') {
         const t = st.target;
         const letters = t.word.split('');
@@ -981,7 +1124,7 @@ LL.engine = {
                 ${relics.map((r, i) => `
                   <button type="button" class="relic-spot ${found.has(i) ? 'found' : ''}" style="left:${r.left};top:${r.top}" data-ri="${i}">
                     ${r.img ? `<img src="${r.img}" alt="ნივთი" class="px-prop sm">` : '✨'}
-                    <span class="prop-badge">${found.has(i) ? r.letter.char : r.letter.char}</span>
+                    <span class="prop-badge">${r.letter.char}</span>
                   </button>
                 `).join('')}
               </div>
@@ -1014,12 +1157,12 @@ LL.engine = {
         return;
       }
 
-      // 4. ORNATE WOODEN MEMORY CARDS (Mtskheta)
+      // 4. ORNATE WOODEN MEMORY CARDS
       if (st.kind === 'ornate_memory') {
         const cards = [];
         this.levelLetters.forEach(l => {
-          cards.push({ pair: l.id, text: l.char, isBig: true });
-          cards.push({ pair: l.id, text: l.name, isBig: false });
+          cards.push({ pair: l.id, text: l.char });
+          cards.push({ pair: l.id, text: l.name });
         });
         cards.sort(() => Math.random() - 0.5);
         const matched = new Set();
@@ -1071,7 +1214,7 @@ LL.engine = {
         return;
       }
 
-      // 5. LOCKED GATES & ORNATE KEYS (Vardzia)
+      // 5. LOCKED GATES & ORNATE KEYS
       if (st.kind === 'key_locks') {
         let lockIdx = 0;
         const paintLocks = () => {
@@ -1329,8 +1472,240 @@ LL.engine = {
         return;
       }
 
-      // 10. STANDARD RECOGNIZE / MISSING FALLBACK STAGES
-      const t = st.target;
+      // 10. CHRONOLOGICAL STORY ORDERING
+      if (st.kind === 'sequence_order') {
+        const steps = st.steps;
+        const order = steps.map((_, i) => i).sort(() => Math.random() - 0.5);
+        let picked = [];
+
+        const paintSeq = () => {
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <h3>${st.title}</h3>
+              <p>დაალაგე მოვლენები სწორი თანმიმდევრობით:</p>
+              <div class="seq-picked">${picked.map(i => `<span class="hud-pill got">${steps[i]}</span>`).join(' → ') || '...'}</div>
+              <div class="seq-list">
+                ${order.map(idx => `<button type="button" class="btn alt seq-btn" data-si="${idx}" ${picked.includes(idx) ? 'disabled' : ''}>${steps[idx]}</button>`).join('')}
+              </div>
+              <button type="button" class="btn alt sm" id="seqResetBtn">↺ თავიდან</button>
+              <p class="err" id="mgFeedback"></p>
+            </div>
+          `;
+          box.querySelector('#seqResetBtn').onclick = () => { picked = []; paintSeq(); };
+          box.querySelectorAll('[data-si]').forEach(btn => {
+            btn.onclick = () => {
+              const idx = Number(btn.dataset.si);
+              if (idx === picked.length) {
+                if (LL.audio) LL.audio.play('collect');
+                picked.push(idx);
+                if (picked.length === steps.length) setTimeout(advanceStage, 260);
+                else paintSeq();
+              } else {
+                this.mistakes++;
+                if (LL.audio) LL.audio.play('wrong');
+                box.querySelector('#mgFeedback').textContent = 'დაფიქრდი, რა მოხდა პირველად!';
+              }
+            };
+          });
+        };
+        paintSeq();
+        return;
+      }
+
+      // 11. 3x3 SLIDING STONE MOSAIC
+      if (st.kind === 'sliding_mosaic') {
+        let tiles = [1, 2, 3, 4, 5, 6, 7, 0, 8];
+        if (Math.random() > 0.5) tiles = [1, 2, 3, 4, 0, 6, 7, 5, 8];
+
+        const paintMosaic = () => {
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <p>აღადგინე ქვის მოზაიკა 1-დან 8-მდე (დააკლიკე ცარიელი უჯრის გვერდით მდებარე ფილას):</p>
+              <div class="mosaic-grid">
+                ${tiles.map((val, idx) => `
+                  <button type="button" class="mosaic-tile ${val === 0 ? 'empty' : ''}" style="${val && P.woodRune ? `background-image:url('${P.woodRune}')` : ''}" data-mi="${idx}">
+                    ${val ? `${val}<small>${this.learnedPool[val - 1]?.char || ''}</small>` : ''}
+                  </button>
+                `).join('')}
+              </div>
+              <p class="note" id="mgHintBox"></p>
+            </div>
+          `;
+          box.querySelector('#mgHintBtn').onclick = () => {
+            box.querySelector('#mgHintBox').textContent = '💡 გადააადგილე ციფრები 1–8 რიგის მიხედვით, ცარიელი უჯრა კი ბოლოში დატოვე.';
+          };
+          box.querySelectorAll('[data-mi]').forEach(btn => {
+            btn.onclick = () => {
+              const j = Number(btn.dataset.mi);
+              const z = tiles.indexOf(0);
+              const adj = Math.abs((z % 3) - (j % 3)) + Math.abs(Math.floor(z / 3) - Math.floor(j / 3)) === 1;
+              if (!adj) return;
+              if (LL.audio) LL.audio.play('click');
+              [tiles[z], tiles[j]] = [tiles[j], tiles[z]];
+              if (tiles.every((v, i) => v === (i + 1) % 9)) {
+                if (LL.audio) LL.audio.play('correct');
+                setTimeout(advanceStage, 260);
+              } else {
+                paintMosaic();
+              }
+            };
+          });
+        };
+        paintMosaic();
+        return;
+      }
+
+      // 12. FLASH-MEMORY 3x3 BOARD
+      if (st.kind === 'flash_memory') {
+        const targets = [0, 1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5).slice(0, 3);
+        const found = new Set();
+        let recallPhase = false;
+
+        const paintFlash = () => {
+          box.innerHTML = `
+            <div class="panel mg-card rpg-box">
+              ${headerHTML}
+              <p>${recallPhase ? `იპოვე სად დაიმალა: <b>${this.levelLetters.map(l => l.char).join(', ')}</b> (${found.size}/3)` : 'დაიმახსოვრე, რომელ უჯრებში ანათებს სამი ასო:'}</p>
+              <div class="mosaic-grid">
+                ${Array.from({ length: 9 }, (_, idx) => {
+                  const tPos = targets.indexOf(idx);
+                  const show = (!recallPhase && tPos !== -1) || found.has(idx);
+                  return `<button type="button" class="mosaic-tile ${show ? 'lit' : ''}" data-fi="${idx}">
+                    ${show ? this.levelLetters[tPos].char : '📜'}
+                  </button>`;
+                }).join('')}
+              </div>
+              ${!recallPhase ? `<button type="button" class="btn big" id="startRecallBtn">დავიმახსოვრე ▶</button>` : ''}
+              <p class="err" id="mgFeedback"></p>
+            </div>
+          `;
+          const startBtn = box.querySelector('#startRecallBtn');
+          if (startBtn) startBtn.onclick = () => { recallPhase = true; paintFlash(); };
+          box.querySelectorAll('[data-fi]').forEach(btn => {
+            btn.onclick = () => {
+              if (!recallPhase) return;
+              const idx = Number(btn.dataset.fi);
+              if (targets.includes(idx)) {
+                if (LL.audio) LL.audio.play('collect');
+                found.add(idx);
+                if (found.size === 3) setTimeout(advanceStage, 260);
+                else paintFlash();
+              } else {
+                this.mistakes++;
+                if (LL.audio) LL.audio.play('wrong');
+                box.querySelector('#mgFeedback').textContent = 'აქ ასო არ იმალებოდა — სცადე სხვა უჯრა!';
+              }
+            };
+          });
+        };
+        paintFlash();
+        return;
+      }
+
+      // 13. ALPHABET NUMBER CIPHER
+      if (st.kind === 'alphabet_cipher') {
+        const t = st.target;
+        const wordChars = t.word.split('');
+        const codes = wordChars.map(ch => (this.allLetters.find(x => x.char === ch)?.id || 1));
+
+        box.innerHTML = `
+          <div class="panel mg-card rpg-box">
+            ${headerHTML}
+            <p>გაშიფრე სიტყვა ანბანის რიგითი ნომრებით (${t.hint}):</p>
+            <div class="cipher-code">${codes.join(' — ')}</div>
+            <div class="cipher-key">
+              ${this.learnedPool.map(l => `<span><b>${l.id}</b>=${l.char}</span>`).join(' ')}
+            </div>
+            <input id="cipherInput" placeholder="ჩაწერე გაშიფრული სიტყვა" autocomplete="off">
+            <button type="button" class="btn big" id="cipherCheckBtn">შემოწმება ▶</button>
+            <p class="note" id="mgHintBox"></p>
+            <p class="err" id="mgFeedback"></p>
+          </div>
+        `;
+        box.querySelector('#mgHintBtn').onclick = () => {
+          box.querySelector('#mgHintBox').textContent = `💡 პირველი ნომერი ${codes[0]} არის ასო „${wordChars[0]}“ (${t.syllables}).`;
+        };
+        const verify = () => {
+          const val = box.querySelector('#cipherInput').value.trim();
+          if (val === t.word) {
+            if (LL.audio) LL.audio.play('correct');
+            advanceStage();
+          } else {
+            this.mistakes++;
+            if (LL.audio) LL.audio.play('wrong');
+            box.querySelector('#mgFeedback').textContent = 'გადაამოწმე თითოეული რიცხვი ზემოთ მოცემულ ცხრილში!';
+          }
+        };
+        box.querySelector('#cipherCheckBtn').onclick = verify;
+        box.querySelector('#cipherInput').onkeydown = e => { if (e.key === 'Enter') verify(); };
+        return;
+      }
+
+      // 14. 4-DIGIT HISTORICAL LOCK
+      if (st.kind === 'year_lock') {
+        box.innerHTML = `
+          <div class="panel mg-card rpg-box">
+            ${headerHTML}
+            <h3>🔐 ${st.title}</h3>
+            <p>${st.hint}</p>
+            <input id="yearInput" inputmode="numeric" maxlength="4" placeholder="ჩაწერე 4-ნიშნა წელი">
+            <button type="button" class="btn big" id="yearUnlockBtn">საკეტის გახსნა ▶</button>
+            <p class="note" id="mgHintBox"></p>
+            <p class="err" id="mgFeedback"></p>
+          </div>
+        `;
+        box.querySelector('#mgHintBtn').onclick = () => {
+          box.querySelector('#mgHintBox').textContent = `💡 კოდი წერია ზედა წინადადებაში: ${st.code}`;
+        };
+        const checkYear = () => {
+          if (box.querySelector('#yearInput').value.trim() === st.code) {
+            if (LL.audio) LL.audio.play('unlock');
+            advanceStage();
+          } else {
+            this.mistakes++;
+            if (LL.audio) LL.audio.play('wrong');
+            box.querySelector('#mgFeedback').textContent = 'ყურადღებით წაიკითხე წელი ზედა ტექსტში!';
+          }
+        };
+        box.querySelector('#yearUnlockBtn').onclick = checkYear;
+        box.querySelector('#yearInput').onkeydown = e => { if (e.key === 'Enter') checkYear(); };
+        return;
+      }
+
+      // 15. DEDA ENA STORY RIDDLE
+      if (st.kind === 'story_riddle') {
+        const t = st.target;
+        const opts = [t, ...this.pickLearnedDecoys([t.id], cfg.decoys)].sort(() => Math.random() - 0.5);
+        box.innerHTML = `
+          <div class="panel mg-card rpg-box">
+            ${headerHTML}
+            <p class="story-quote">„${st.story}“</p>
+            <p><b>${st.q}</b></p>
+            <div class="mg-choices">
+              ${opts.map(o => `<button type="button" class="btn big" data-oid="${o.id}">${o.char}</button>`).join('')}
+            </div>
+            <p class="err" id="mgFeedback"></p>
+          </div>
+        `;
+        box.querySelectorAll('[data-oid]').forEach(btn => {
+          btn.onclick = () => {
+            if (Number(btn.dataset.oid) === t.id) {
+              if (LL.audio) LL.audio.play('correct');
+              advanceStage();
+            } else {
+              this.mistakes++;
+              if (LL.audio) LL.audio.play('wrong');
+              box.querySelector('#mgFeedback').textContent = 'კიდევ სცადე!';
+            }
+          };
+        });
+        return;
+      }
+
+      // 16. STANDARD RECOGNIZE / MISSING STAGES
+      const t = st.target || this.levelLetters[0];
       const isMissing = st.kind === 'missing';
       const decoys = this.pickLearnedDecoys([t.id], cfg.decoys);
       const opts = [t, ...decoys].sort(() => Math.random() - 0.5);
@@ -1354,13 +1729,13 @@ LL.engine = {
       box.querySelectorAll('[data-oid]').forEach(btn => {
         btn.onclick = () => {
           const chosen = opts.find(x => x.id === Number(btn.dataset.oid));
-          if (chosen.id === t.id) {
+          if (chosen && chosen.id === t.id) {
             if (LL.audio) LL.audio.play('correct');
             advanceStage();
           } else {
             this.mistakes++;
             if (LL.audio) LL.audio.play('wrong');
-            box.querySelector('#mgFeedback').textContent = `ეს არის „${chosen.char}“ (${chosen.name}). სცადე კიდევ ერთხელ!`;
+            box.querySelector('#mgFeedback').textContent = `ეს არის „${chosen ? chosen.char : ''}“ (${chosen ? chosen.name : ''}). სცადე კიდევ ერთხელ!`;
           }
         };
       });
@@ -1412,7 +1787,7 @@ LL.engine = {
       return;
     }
 
-    const startX = Math.max(200, Math.min(820, 850 - this.cameraX));
+    const startX = Math.max(200, Math.min(820, 940 - this.cameraX));
     this.flyingLetters = this.levelLetters.map((l, idx) => ({
       char: l.char, sx: startX + (idx - 1) * 28, sy: 400, tx: 810, ty: 36, x: startX, y: 400, t: -idx * 0.2
     }));
@@ -1431,15 +1806,25 @@ LL.engine = {
   },
 
   showLevelCompleteCard(stars, state, restoredImg = null) {
+    this.mode = 'complete';
     const box = document.getElementById('minigameOverlay');
     box.hidden = false;
     const isFinal = this.level.n === 11;
+    const savedLetter = localStorage.getItem('ll_future_letter') || '';
 
     box.innerHTML = `
       <div class="panel mg-card complete-card rpg-box">
         <h2>${isFinal ? '🎉 შენ 33 ასო გადაარჩინე! ქართული ანბანი ისევ ცოცხალია!' : `დონე ${this.level.n} დასრულებულია!`}</h2>
         ${isFinal && restoredImg ? `<img src="${restoredImg.src}" alt="აღდგენილი ბიბლიოთეკა" class="finale-art">` : ''}
-        ${isFinal ? `<p class="finale-lesson">„ცოდნა მაშინ არის ნამდვილი სიმდიდრე, როდესაც მას სხვებსაც ვუზიარებთ.“</p>` : ''}
+        ${isFinal ? `
+          <p class="finale-lesson">„ცოდნა მაშინ არის ნამდვილი სიმდიდრე, როდესაც მას სხვებსაც ვუზიარებთ.“</p>
+          <div class="finale-letter-box">
+            <label>✍️ წერილი მომავალ თაობას (შეინახება შენს წიგნში):
+              <textarea id="futureLetterTxt" rows="2" placeholder="რატომ არის ქართული ანბანი ძვირფასი შენთვის?">${savedLetter}</textarea>
+            </label>
+            <button type="button" class="btn" id="downloadDiplomaBtn">🏅 ილუსტრირებული დიპლომის ჩამოტვირთვა (PNG)</button>
+          </div>
+        ` : ''}
         <p class="stars-row">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</p>
         <p>ანბანის წიგნში დაემატა: <b>${this.levelLetters.map(l => `${l.char} (${l.name})`).join(' · ')}</b></p>
         <p>შეგროვებული ასოები: <b>${state.letters.length} / 33</b></p>
@@ -1451,11 +1836,201 @@ LL.engine = {
       </div>
     `;
 
+    if (isFinal) {
+      const txtEl = box.querySelector('#futureLetterTxt');
+      if (txtEl) {
+        txtEl.addEventListener('keydown', e => e.stopPropagation());
+        txtEl.oninput = e => localStorage.setItem('ll_future_letter', e.target.value);
+      }
+      const dipBtn = box.querySelector('#downloadDiplomaBtn');
+      if (dipBtn) dipBtn.onclick = () => this.downloadDiplomaPNG();
+    }
+
     box.querySelector('#openBookAfterBtn').onclick = () => LL.alphabetBook.open(this.levelLetters[0].id);
     box.querySelector('#replayLevelBtn').onclick = () => this.startLevel(this.level.n);
     box.querySelector('#toMapAfterBtn').onclick = () => {
       if (LL.audio) LL.audio.play('unlock');
       document.getElementById('hudBackMap').click();
     };
+  },
+
+  async downloadDiplomaPNG() {
+    const nick = localStorage.getItem('ll_nickname') || 'ქართული ენის მცველი';
+    const note = (localStorage.getItem('ll_future_letter') || '').trim();
+    const [bgImg, sheets] = await Promise.all([
+      LL.assets.load(LL.assets.manifest.library.restored).then(im => im || LL.assets.load(LL.assets.manifest.home)),
+      LL.assets.preloadSheets()
+    ]);
+
+    const cv = document.createElement('canvas');
+    cv.width = 1400;
+    cv.height = 980;
+    const x = cv.getContext('2d');
+
+    // 1. Rich royal navy & gold outer frame
+    const bgGrad = x.createLinearGradient(0, 0, 1400, 980);
+    bgGrad.addColorStop(0, '#14203f');
+    bgGrad.addColorStop(1, '#1d3b2a');
+    x.fillStyle = bgGrad;
+    x.fillRect(0, 0, 1400, 980);
+
+    // 2. Warm parchment inner sheet with subtle restored library watermark
+    x.fillStyle = '#f6ebd0';
+    x.fillRect(46, 46, 1308, 888);
+
+    if (bgImg) {
+      x.save();
+      x.globalAlpha = 0.14;
+      x.drawImage(bgImg, 46, 46, 1308, 888);
+      x.restore();
+    }
+
+    // 3. Double ornamental gold & leather borders + corner medallions
+    x.strokeStyle = '#3a220f';
+    x.lineWidth = 8;
+    x.strokeRect(58, 58, 1284, 864);
+    x.strokeStyle = '#d49b27';
+    x.lineWidth = 4;
+    x.strokeRect(74, 74, 1252, 832);
+
+    const drawCornerStar = (cx, cy) => {
+      x.save();
+      x.translate(cx, cy);
+      x.fillStyle = '#d49b27';
+      x.strokeStyle = '#3a220f';
+      x.lineWidth = 3;
+      for (let r = 0; r < 2; r++) {
+        x.rotate((r * Math.PI) / 4);
+        x.fillRect(-16, -16, 32, 32);
+        x.strokeRect(-16, -16, 32, 32);
+      }
+      x.fillStyle = '#8b1e24';
+      x.beginPath();
+      x.arc(0, 0, 7, 0, Math.PI * 2);
+      x.fill();
+      x.restore();
+    };
+    drawCornerStar(74, 74);
+    drawCornerStar(1326, 74);
+    drawCornerStar(74, 906);
+    drawCornerStar(1326, 906);
+
+    // 4. Header ribbon & Georgian title
+    x.fillStyle = '#8b1e24';
+    x.fillRect(360, 96, 680, 44);
+    x.strokeStyle = '#d49b27';
+    x.lineWidth = 3;
+    x.strokeRect(360, 96, 680, 44);
+
+    x.textAlign = 'center';
+    x.fillStyle = '#ffe599';
+    x.font = 'bold 21px "Noto Sans Georgian", sans-serif';
+    x.fillText('„დედა ენის“ 150 წლის იუბილე · დაკარგული ასოების საიდუმლო', 700, 125);
+
+    x.fillStyle = '#2a1d10';
+    x.font = 'bold 68px "Noto Sans Georgian", sans-serif';
+    x.fillText('საპატიო დიპლომი', 700, 222);
+
+    x.fillStyle = '#5c3417';
+    x.font = 'bold 26px "Noto Sans Georgian", sans-serif';
+    x.fillText('გადაეცემა ქართული ანბანის მცველს', 700, 275);
+
+    // 5. Player Name with golden underline flourish
+    x.fillStyle = '#195429';
+    x.font = 'bold 58px "Noto Sans Georgian", sans-serif';
+    x.fillText(nick, 700, 355);
+
+    x.strokeStyle = '#d49b27';
+    x.lineWidth = 4;
+    x.beginPath();
+    x.moveTo(430, 376);
+    x.lineTo(970, 376);
+    x.stroke();
+
+    x.fillStyle = '#2a1d10';
+    x.font = 'bold 25px "Noto Sans Georgian", sans-serif';
+    x.fillText('საქართველოს 11-ვე კუთხის შემოვლისა და 33 ქართული ასოს გადარჩენისთვის', 700, 428);
+
+    // 6. All 33 Georgian letters inside golden medallions
+    const row1 = 'ა ბ გ დ ე ვ ზ თ ი კ ლ მ ნ ო პ ჟ რ'.split(' ');
+    const row2 = 'ს ტ უ ფ ქ ღ ყ შ ჩ ც ძ წ ჭ ხ ჯ ჰ'.split(' ');
+    const drawGlyphRow = (arr, yPos) => {
+      const gap = 58;
+      const startX = 700 - ((arr.length - 1) * gap) / 2;
+      arr.forEach((ch, idx) => {
+        const gx = startX + idx * gap;
+        x.fillStyle = '#f2b632';
+        x.strokeStyle = '#3a220f';
+        x.lineWidth = 2.5;
+        x.beginPath();
+        x.arc(gx, yPos - 8, 22, 0, Math.PI * 2);
+        x.fill();
+        x.stroke();
+        x.fillStyle = '#2a1d10';
+        x.font = 'bold 23px "Noto Sans Georgian", sans-serif';
+        x.fillText(ch, gx, yPos);
+      });
+    };
+    drawGlyphRow(row1, 492);
+    drawGlyphRow(row2, 550);
+
+    // 7. Moral lesson + Optional player message
+    x.fillStyle = '#5c2d0c';
+    x.font = 'bold 23px "Noto Sans Georgian", sans-serif';
+    x.fillText('„ცოდნა მაშინ არის ნამდვილი სიმდიდრე, როდესაც მას სხვებსაც ვუზიარებთ.“', 700, 616);
+
+    if (note) {
+      x.fillStyle = '#3a2714';
+      x.font = 'bold 19px "Noto Sans Georgian", sans-serif';
+      x.fillText(`„${note.slice(0, 85)}${note.length > 85 ? '...' : ''}“`, 700, 656);
+    }
+
+    // 8. Pixel-art character trio (Iakob, Player Hero, Asotsqlapia) + Royal Wax Seal
+    if (sheets) {
+      const iakob = LL.sprites.createActor('iakob', 'celebrate', 6);
+      const hero = LL.sprites.createActor('player', 'celebrate', 6);
+      const monster = LL.sprites.createActor('monster', 'celebrate', 6);
+      iakob.draw(x, sheets, 270, 875, 2.5);
+      hero.draw(x, sheets, 430, 875, 2.5);
+      monster.draw(x, sheets, 1120, 875, 2.5);
+    }
+
+    // Crimson & Gold 33/33 Wax Seal
+    x.save();
+    x.translate(700, 795);
+    x.fillStyle = '#8b1e24';
+    x.strokeStyle = '#d49b27';
+    x.lineWidth = 5;
+    x.beginPath();
+    x.arc(0, 0, 56, 0, Math.PI * 2);
+    x.fill();
+    x.stroke();
+    x.fillStyle = '#ffe599';
+    x.font = 'bold 24px "Noto Sans Georgian", sans-serif';
+    x.fillText('33 / 33', 0, -2);
+    x.font = 'bold 15px "Noto Sans Georgian", sans-serif';
+    x.fillText('დედა ენა · 2026', 0, 22);
+    x.restore();
+
+    // School & Creator attribution footer on Diploma
+    const cr = LL.credits || {
+      name: 'ნინო კუპრეიშვილი',
+      grade: 'VI კლასი',
+      school: 'სსიპ ქალაქ აბაშის ნოღოხაშის საჯარო სკოლა'
+    };
+    x.fillStyle = '#3a220f';
+    x.font = 'bold 20px "Noto Sans Georgian", sans-serif';
+    x.fillText(cr.school, 700, 882);
+    x.font = 'bold 17px "Noto Sans Georgian", sans-serif';
+    x.fillStyle = '#5c3417';
+    x.fillText(`პროექტის ავტორი: ${cr.name} (${cr.grade})`, 700, 908);
+
+    cv.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `დიპლომი_${nick}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
   }
 };

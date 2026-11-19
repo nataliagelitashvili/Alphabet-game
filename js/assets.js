@@ -6,6 +6,7 @@ LL.assets = {
   manifest: {
     home: 'backgrounds/home_hero.png',
     map: 'backgrounds/map_georgia.png',
+    creator: 'characters/creator_nino.png',
 
     library: {
       main: 'library/main_library.png',

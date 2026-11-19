@@ -1,4 +1,4 @@
-/* World Map, VN Intro Frame, Character Creator, Canvas Stage, Minigames & Alphabet Book */
+/* World Map, VN Intro Frame, Character Creator, Canvas Stage, Minigames, Alphabet Book & Profile */
 
 /* 1. Georgia World Map */
 .map-wrap { margin-top: 14px; }
@@ -230,7 +230,7 @@
 .hc-gender-row { display: flex; gap: 8px; }
 .hc-custom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
 
-/* 4. Full-Screen Playable Canvas Stage & HUD */
+/* 4. Full-Screen Edge-to-Edge Playable Canvas Stage & HUD */
 .game-shell {
   position: fixed;
   inset: 0;
@@ -238,8 +238,7 @@
   background: #0f172a;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 8px;
+  padding: 0;
 }
 .game-hud {
   display: flex;
@@ -249,8 +248,9 @@
   justify-content: space-between;
   background: var(--parch);
   color: var(--ink);
-  border: 2px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
   padding: 6px 12px;
+  z-index: 3;
 }
 .hud-left, .hud-right, .hud-letters {
   display: flex;
@@ -272,26 +272,22 @@
 .canvas-frame {
   position: relative;
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  margin: 6px 0;
-  border: 3px solid var(--leather);
   background: #0d1526;
 }
 #playCanvas {
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: 100%;
   image-rendering: pixelated;
   display: block;
 }
 .dlg-bar {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
   background: var(--parch);
   color: var(--ink);
   border: 3px solid var(--ink);
@@ -382,7 +378,7 @@
 .finale-lesson { font-size: 1.1rem; color: #5c2d0c; background: #fff4cc; padding: 10px; border: 2px solid var(--leather); }
 
 /* 5. Mobile Touch Controls */
-.touch-controls { display: none; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.touch-controls { display: none; justify-content: space-between; gap: 10px; padding: 4px 8px; background: #0f172a; }
 .touch-dpad, .touch-actions { display: flex; gap: 8px; }
 .touch-btn { min-width: 56px; min-height: 46px; touch-action: manipulation; }
 @media (pointer: coarse), (max-width: 900px) { .touch-controls { display: flex; } }
@@ -540,15 +536,11 @@
   font-size: 0.85rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .stage path, .marker b { animation: none; }
-}
-
-/* Sliced Pixel-Art Minigame Props & Boards */
-.px-prop { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto; }
-.px-prop.sm { width: 38px; height: 38px; }
-.px-prop.lg { width: 78px; height: 70px; }
-.px-prop.wide { width: 76px; height: 42px; }
+/* 7. Sliced Pixel-Art Minigame Props & Boards */
+.px-prop { width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35)); }
+.px-prop.sm { width: 42px; height: 42px; }
+.px-prop.lg { width: 84px; height: 76px; }
+.px-prop.wide { width: 84px; height: 46px; }
 
 .prop-shelf, .locks-row, .keys-row, .wood-slots-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 12px 0; }
 .prop-item-btn, .key-btn {
@@ -573,48 +565,54 @@
 }
 
 .wood-slot {
-  width: 58px;
-  height: 58px;
-  background-size: cover;
+  width: 60px;
+  height: 60px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   image-rendering: pixelated;
-  border: 2px solid var(--ink);
   display: grid;
   place-items: center;
-  font-size: 1.55rem;
+  font-size: 1.6rem;
   color: #fff;
-  text-shadow: 0 2px 3px #1a0d04;
+  text-shadow: 0 2px 4px #1a0d04;
 }
 .rune-tile-btn {
-  width: 56px;
-  height: 56px;
-  background-size: cover;
+  width: 58px;
+  height: 58px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: transparent;
   image-rendering: pixelated;
-  border: 2px solid var(--ink);
+  border: 0;
   cursor: pointer;
   font: inherit;
-  font-size: 1.45rem;
+  font-size: 1.5rem;
   color: #fff;
-  text-shadow: 0 2px 3px #1a0d04;
+  text-shadow: 0 2px 4px #1a0d04;
+  transition: transform 0.08s ease;
 }
-.rune-tile-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.rune-tile-btn:hover:not([disabled]) { transform: scale(1.08); }
+.rune-tile-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 
-.ornate-cards-grid { display: grid; grid-template-columns: repeat(3, 86px); gap: 10px; justify-content: center; margin: 12px 0; }
+.ornate-cards-grid { display: grid; grid-template-columns: repeat(3, 88px); gap: 10px; justify-content: center; margin: 12px 0; }
 .ornate-card {
-  width: 86px;
-  height: 116px;
-  background-size: cover;
-  background-position: center;
+  width: 88px;
+  height: 118px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: transparent;
   image-rendering: pixelated;
-  border: 2px solid var(--ink);
-  border-radius: 4px;
+  border: 0;
   cursor: pointer;
   font: inherit;
   font-size: 1.15rem;
   color: var(--ink);
   display: grid;
   place-items: center;
-  padding: 6px;
+  padding: 8px;
+  transition: transform 0.1s ease;
 }
+.ornate-card:hover { transform: translateY(-2px); }
 
 .lock-box { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 10px; background: #fff8e3; border: 2px solid var(--ink); border-radius: 4px; }
 .plate-btn {
@@ -656,3 +654,114 @@
   font-size: 1.25rem;
 }
 .finale-art { width: 100%; max-height: 220px; object-fit: cover; border: 3px solid var(--ink); border-radius: 4px; margin: 8px 0; image-rendering: pixelated; }
+
+/* 8. Story Sequence, Sliding Mosaic, Cipher & Finale Letter */
+.seq-picked { min-height: 36px; margin: 8px 0; font-size: 0.9rem; }
+.seq-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.seq-btn { width: 100%; justify-content: flex-start; text-align: left; }
+.mosaic-grid { display: grid; grid-template-columns: repeat(3, 74px); gap: 8px; justify-content: center; margin: 12px 0; }
+.mosaic-tile {
+  width: 74px;
+  height: 74px;
+  background-size: cover;
+  image-rendering: pixelated;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background-color: #e6d3a7;
+  color: #fff;
+  text-shadow: 0 2px 3px #1a0d04;
+  font: inherit;
+  font-size: 1.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mosaic-tile.empty { background: rgba(42, 29, 16, 0.25); cursor: default; }
+.mosaic-tile.lit { background-color: var(--gold); color: var(--ink); text-shadow: none; }
+.mosaic-tile small { font-size: 0.85rem; }
+.cipher-code { font-size: 1.5rem; letter-spacing: 0.08em; background: #fff8e3; border: 2px solid var(--ink); padding: 8px; margin: 8px 0; }
+.cipher-key { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; font-size: 0.85rem; margin-bottom: 10px; }
+.cipher-key span { background: #e8d6a6; padding: 2px 6px; border: 1px solid var(--ink); border-radius: 3px; }
+.story-quote { background: #fff8e3; border-left: 4px solid var(--leather); padding: 10px 12px; font-style: italic; text-align: left; }
+.finale-letter-box { margin: 10px 0; }
+.finale-letter-box textarea { width: 100%; font: inherit; padding: 8px; border: 2px solid var(--ink); background: #fffdf5; margin: 6px 0; }
+
+/* 9. Profile Card & 11x3 Letter Grid */
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+.stat-box {
+  background: #fff8e3;
+  border: 2px solid var(--leather);
+  border-radius: 4px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.stat-box b { font-size: 1.05rem; color: #5c2d0c; }
+.stat-box span { font-size: 0.78rem; opacity: 0.85; }
+
+.profile-letters {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+  margin: 12px 0;
+}
+.p-letter {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: #d9c496;
+  color: var(--ink);
+  font-size: clamp(0.85rem, 2vw, 1.15rem);
+}
+.p-letter.got {
+  background: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+.profile-quote {
+  background: #fff8e3;
+  border-left: 4px solid var(--leather);
+  padding: 10px 12px;
+  text-align: left;
+  margin: 10px 0;
+  font-size: 0.92rem;
+}
+.profile-quote p { margin: 4px 0 0; font-style: italic; }
+
+.chk-row { display: flex; align-items: center; gap: 8px; }
+.chk-row input { width: auto; }
+
+.ll-toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 60;
+  background: var(--gold);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  padding: 10px 16px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: all 0.25s;
+}
+.ll-toast.on { opacity: 1; transform: translateY(0); }
+
+@media (max-width: 560px) {
+  .profile-stats { grid-template-columns: repeat(2, 1fr); }
+  .profile-letters { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage path, .marker b { animation: none; }
+}
